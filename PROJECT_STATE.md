@@ -2,7 +2,7 @@
 
 > Este arquivo é o centro de controle do projeto. Atualizado a cada sessão de trabalho.
 > Pode ser lido por qualquer instância do Claude Code em qualquer máquina para retomar o contexto.
-> Última atualização: 2026-07-08 (Sessão 1, continuação — estrutura do repo criada; `docker compose build` FALHOU por falta de espaço em disco, abortado com segurança pelo monitor)
+> Última atualização: 2026-07-08 (Sessão 1, continuação — smoke test concluído: `./desktop/dev.sh` builda e abre a janela do Tauri de verdade, confirmado pelo usuário)
 
 ---
 
@@ -271,15 +271,22 @@ O levantamento de fontes já foi feito antes deste projeto virar app desktop —
   - **Achado**: `docker-compose.yml` sem `name:` explícito colidiria com o projeto Compose `desktop` do TruthID (mesma pasta `desktop/` nos dois repos) — corrigido com `name: practice-valuation` na primeira linha do arquivo
   - **`docker compose build` FALHOU** (não confundir com "ainda não testado"): o monitor de segurança abortou o build sozinho quando o disco chegou a ~462MB livres, exatamente como planejado — nenhuma imagem `practice-valuation-desktop` foi gerada. O build tinha acabado de terminar a instalação do Rust (etapa 3 de 7 do Dockerfile) quando foi morto; a etapa seguinte (Python3/pip) nem começou
   - Depois do abort, disco ficou em **1.5GB livres (96% de uso)** — pior do que antes de tentar (tínhamos 4.9GB livres depois da 1ª limpeza). `docker image prune -f` rodado de novo não liberou nada a mais (`0B`); sobraram 2 containers parados do próprio build interrompido (`quizzical_bell`, `adoring_booth`) que dá pra remover com segurança, mas a remoção foi **bloqueada pelo classificador de segurança do modo automático** (ação irreversível sem o usuário por perto pra confirmar) — ficou pendente, não é do TruthID, só limpar quando o usuário estiver presente
-  - **Conclusão**: os ~4.9GB livres que sobraram da limpeza segura (só imagens órfãs) não foram suficientes pra esse build. Pra realmente conseguir buildar a imagem do `desktop/`, vai precisar de uma das duas rotas discutidas no início da sessão: (a) liberar mais espaço abrindo mão do cache do TruthID (imagem `mobile-flutter` 5.94GB + caches Gradle/NDK ~7.6GB — decisão do usuário, deixa o próximo `docker compose up` do mobile do TruthID mais lento) ou (b) aumentar o disco/mover algo pra outro lugar
+  - **Conclusão**: os ~4.9GB livres que sobraram da limpeza segura (só imagens órfãs) não foram suficientes pra esse build.
+  - **Resolvido, com autorização do usuário**: removida a imagem `mobile-flutter` (5.94GB) + volumes `mobile_gradle_cache` e `mobile_android_ndk` (~7.6GB) do TruthID — liberou ~13GB (disco foi de 1.5GB → 6.9GB livres). Também removidos os 2 containers órfãos do build falhado (`quizzical_bell`, `adoring_booth`), com o usuário presente — mais ~3GB (→ 9.9GB livres). **Trade-off aceito**: o próximo `docker compose up` do mobile do TruthID vai reconstruir Flutter/Gradle/NDK do zero (mais lento na próxima vez que o usuário voltar pro TruthID mobile)
+  - `docker compose build` do `desktop/` disparado de novo, com o mesmo monitor de segurança de disco — **dessa vez terminou com sucesso** (`practice-valuation-desktop:latest`, 4.35GB, disco estável em 8.1GB livres)
+  - **`docker compose up` (smoke test real) — mais dois problemas encontrados e corrigidos antes de funcionar**:
+    1. `npm install` travava indefinidamente (sem erro, sem progresso) tentando alcançar o registro do npm — causa: **sem rota de saída IPv6** nesse ambiente, e o Node por padrão tenta IPv6 antes de cair pro IPv4, esperando o timeout de TCP (minutos) em vez de falhar rápido. Corrigido com `NODE_OPTIONS=--dns-result-order=ipv4first` no `docker-compose.yml` (`environment:`)
+    2. Depois desse fix, travava de novo especificamente na etapa de `npm audit` (uma chamada de rede separada, que não respeitava o mesmo fix). Corrigido pulando essa etapa: `command: npm install --no-audit --no-fund && npm run tauri dev`
+    3. Como o `node_modules` já tinha passado por várias tentativas interrompidas (kills no meio da instalação, testando os fixes acima), ficou num estado inconsistente — erro `ENOTEMPTY` do npm tentando renomear uma pasta temporária (`vite` → `.vite-XXXX`). Resolvido apagando `node_modules` por completo (via container, já que os arquivos eram donos de `root`) e reinstalando do zero
+  - **Resultado final: o app abre de verdade.** `docker compose up` (ou `./desktop/dev.sh`) sobe o container, `npm install` + `cargo build` rodam dentro dele, e a janela do Tauri aparece na tela do usuário via X11 — confirmado visualmente pelo usuário. Smoke test da Fase 0.5/4 considerado **concluído**
 
 **Pendências pra próxima sessão** (em ordem):
-1. **Decidir como liberar espaço em disco antes de tentar o build de novo** (ver conclusão acima — provavelmente vai exigir abrir mão de cache do TruthID, ou outra fonte de espaço)
-2. Remover os containers órfãos do build falhado (`docker rm quizzical_bell adoring_booth`) — seguro, mas precisa do usuário presente pra confirmar (bloqueado pelo modo automático)
-3. Rodar `docker compose build` de novo (com o monitor de disco) e, se terminar OK, `./desktop/dev.sh` pra confirmar que a janela do Tauri abre de verdade (smoke test — o template padrão tem um botão "Greet" que testa a comunicação React↔Rust)
-4. Trazer a lista de metodologias/fórmulas de preço-teto (ações e cripto) — Fase 3.1
-5. Decidir onde o arquivo SQLite físico vai morar (Fase 1) e começar o schema (`asset`, `assumption_set`, `valuation_calc`, `tracked_indicator`, `alert`)
-6. README.md e LICENSE na raiz do repo ainda não existem (Fase 0.5/6.2/6.3)
+1. Testar o botão "Greet" na janela aberta (smoke test da comunicação React↔Rust via `invoke()`) — só visual, não testado a fundo ainda
+2. Trazer a lista de metodologias/fórmulas de preço-teto (ações e cripto) — Fase 3.1
+3. Decidir onde o arquivo SQLite físico vai morar (Fase 1) e começar o schema (`asset`, `assumption_set`, `valuation_calc`, `tracked_indicator`, `alert`)
+4. README.md e LICENSE na raiz do repo ainda não existem (Fase 0.5/6.2/6.3)
+5. Quando o usuário voltar a mexer no TruthID mobile, lembrar que o cache Docker foi limpo (Sessão 1 do Practice Valuation) — primeiro `docker compose up` de lá vai ser mais lento
+6. Se algum dia migrar a imagem Docker (Node/Debian), lembrar dos 3 fixes de rede/instalação acima — não são óbvios e custaram bastante tempo de debug nesta sessão
 
 ---
 

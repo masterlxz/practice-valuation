@@ -18,10 +18,11 @@ services:
       - XAUTHORITY=/root/.Xauthority            # cookie de auth X11
       - WEBKIT_DISABLE_DMABUF_RENDERER=1        # evita GPU hang no i915 com XWayland
       - WEBKIT_DISABLE_COMPOSITING_MODE=1        # fallback: desativa compositing de GPU no WebKit
+      - NODE_OPTIONS=--dns-result-order=ipv4first  # sem isso o Node tenta IPv6 primeiro e trava (IPv6 não roteia aqui), demorando minutos até cair pro IPv4
     network_mode: host                          # container usa a rede do host (Tauri dev server precisa disso)
     stdin_open: true
     tty: true
-    command: sh -c "npm install && npm run tauri dev"
+    command: sh -c "npm install --no-audit --no-fund && npm run tauri dev"
 
 volumes:
   cargo-registry:
