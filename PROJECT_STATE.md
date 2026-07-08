@@ -2,7 +2,7 @@
 
 > Este arquivo é o centro de controle do projeto. Atualizado a cada sessão de trabalho.
 > Pode ser lido por qualquer instância do Claude Code em qualquer máquina para retomar o contexto.
-> Última atualização: 2026-07-08 (Sessão 1, continuação — botão Greet confirmado; driver SQLite (rusqlite) e WAL decididos, schema fino aguarda lista de metodologias)
+> Última atualização: 2026-07-08 (Sessão 1, continuação — spec funcional de valuation e score cripto entregue: `docs/spec_funcional_valuation_e_cripto.md`, desbloqueia Fase 1 e Fase 3)
 
 ---
 
@@ -69,7 +69,7 @@ Substitui a ideia original de planilha (ver `docs/spec_automacao_dados.md`, hist
 
 **Ainda não decidido**:
 - Biblioteca de gráfico (pra tela de cripto/indicadores, Fase 4.3) — avaliar quando chegar lá (candidatos: Recharts, ou lightweight-charts da TradingView, mais voltada pra preço/candlestick)
-- Lista exata de metodologias de preço-teto (o usuário vai trazer sua lista numa próxima sessão) — isso também trava o desenho fino de `assumption_set`/`valuation_calc` na Fase 1
+- ~~Lista exata de metodologias de preço-teto~~ — entregue na Sessão 1, ver `docs/spec_funcional_valuation_e_cripto.md` e a Fase 3
 
 ---
 
@@ -77,9 +77,9 @@ Substitui a ideia original de planilha (ver `docs/spec_automacao_dados.md`, hist
 
 ```
 Fase 0 — Fundamentos & Decisões de Arquitetura   [~] Em andamento (0.1–0.5 ✓, falta 0.6)
-Fase 1 — Modelo de Dados (schema do banco local)  [~] Em andamento (driver + WAL decididos, schema em aberto)
+Fase 1 — Modelo de Dados (schema do banco local)  [~] Em andamento (entidades e driver decididos, falta a migration)
 Fase 2 — Coleta de Dados (ações BR + cripto)      [ ] Não iniciada
-Fase 3 — Motor de Cálculo (preço-teto/valuation)  [ ] Não iniciada
+Fase 3 — Motor de Cálculo (preço-teto/valuation)  [~] Em andamento (metodologias definidas, cálculo não implementado)
 Fase 4 — Interface Desktop                        [ ] Não iniciada
 Fase 5 — Monitoramento & Alertas                  [ ] Não iniciada
 Fase 6 — Publicação (GitHub público)               [ ] Não iniciada
@@ -126,20 +126,25 @@ Criado na Fase 0.5: `desktop/Dockerfile`, `desktop/docker-compose.yml`, `desktop
 
 **Objetivo**: desenhar o schema do banco local que sustenta tudo — ativos, premissas, cálculos salvos, indicadores e alertas.
 
-**Rascunho inicial de entidades (a refinar quando a lista de preços-teto do usuário chegar)**:
+**Fonte da verdade pro schema**: `docs/spec_funcional_valuation_e_cripto.md` (entregue na Sessão 1) — descreve, modelo por modelo, os inputs, a fórmula e as guardas de erro de cada metodologia. Ver resumo na Fase 3.
+
+**Entidades decididas** (revisado depois da spec chegar — ver nota sobre a mudança de abordagem abaixo):
 - `asset` — ativo acompanhado (ação BR ou cripto), com tipo, ticker/símbolo, nome
-- `assumption_set` — um conjunto de premissas nomeado, vinculado a um `asset` (ex: "cenário conservador", "cenário otimista")
-- `valuation_calc` — um cálculo de preço-teto/valuation, vinculado a um `assumption_set`, com o resultado e a metodologia usada — histórico completo, nada é sobrescrito
-- `tracked_indicator` — indicador monitorado por ativo (ex: preço, P/L, TVL, emissão líquida) com a regra de "zona de compra"
-- `alert` — disparo gerado quando um `tracked_indicator` entra na zona configurada
+- **Uma tabela por modelo de valuation** (sugestão do próprio spec, adotada): `valuation_dcf_fcff`, `valuation_gordon_ddm`, `valuation_bazin`, `valuation_graham`, `valuation_bancos`, `valuation_incorporadoras_rnav`, `valuation_preco_teto_projetivo` — cada uma com os campos fixos daquele modelo (ver spec) + o padrão comum: `ticker`, `ano_ref`, `preco_atual`, campos específicos, `preco_justo` (calculado, cacheado), `margem_seguranca`, `veredito`, `data_ultima_atualizacao`. Cada linha é um cálculo salvo — nada é sobrescrito, dá pra ter várias linhas do mesmo ticker com premissas diferentes (o "múltiplos preços-teto salvos" que o usuário pediu desde o início)
+- `cripto_indicadores` — série temporal do score cripto: `moeda`, `data`, `indicador`, `valor_bruto`, `sinal` (verde/vermelho), `fonte` — permite plotar a evolução do score, não só o snapshot do dia
+- `tracked_indicator` / `alert` — ainda a desenhar (Fase 5), quando entrarmos no motor de monitoramento/zona de compra
+
+**Mudança de abordagem (Sessão 1, depois da spec chegar)**: a ideia anterior de premissas genéricas em JSON (`assumption_set` flexível) foi **substituída** por tabelas rígidas por modelo, como o próprio spec funcional sugere — agora que os campos de cada metodologia são conhecidos e estáveis (não é mais "esperando a lista"), colunas tipadas por modelo são mais simples de validar (ex: as guardas `WACC−g <= 0`, `Ke <= g`) e mais fáceis de consultar do que um blob JSON.
+
+**Regra geral, comum a todos os modelos de ação** (ver spec): `margem_segurança = (preço_justo − preço_atual) / preço_justo`; `veredito` = BARATO se margem > 0, senão CARO. Todo modelo também carrega `ticker`, `ano_ref` (o app calcula `anos_desatualizado = ano_atual − ano_ref` e sinaliza: ≤0 em dia, ==1 atenção, ≥2 desatualizado) e `preço_atual` (API com fallback manual).
 
 **Como Rust e Python acessam o mesmo banco**: os dois já rodam dentro do mesmo container (decisão da Fase 0 — stack híbrida), então não precisa de rede/API entre eles — só apontar os dois pro mesmo arquivo `.db`. Arquivo físico decidido: `data-collector/practice_valuation.db` (já coberto pelo `*.db` do `.gitignore` da raiz; a pasta já é bind-mount, então o arquivo sobrevive entre execuções do container).
 
 **Etapas**:
-- [ ] 1.1 — Validar o rascunho de entidades acima com o usuário (parcialmente amarrado à Fase 3.1 — a lista de metodologias de preço-teto ainda não chegou, então os campos de `assumption_set`/`valuation_calc` provavelmente começam como algo flexível tipo JSON em vez de colunas rígidas, pra não travar nisso)
+- [x] 1.1 — Entidades validadas — desbloqueado pela chegada do spec funcional (Sessão 1). Ver "Mudança de abordagem" acima
 - [x] 1.2 — Driver Rust: **`rusqlite`** (síncrono, direto) em vez de `sqlx` (assíncrono, checagem em compile-time) — decidido na Sessão 1. Motivo: app desktop de usuário único, não é servidor com concorrência real; `sqlx` traria mais setup sem benefício claro aqui
 - [x] 1.2b — **Modo WAL** (Write-Ahead Log) do SQLite será ligado por padrão — Rust e Python são processos diferentes lendo/escrevendo o mesmo arquivo, e WAL deixa isso coexistir melhor (menos "database is locked")
-- [ ] 1.3 — Migrations iniciais (abordagem simples: arquivos SQL versionados aplicados em ordem, sem framework pesado — combina com o "só precisa funcionar" da filosofia do projeto)
+- [ ] 1.3 — Migrations iniciais (abordagem simples: arquivos SQL versionados aplicados em ordem, sem framework pesado — combina com o "só precisa funcionar" da filosofia do projeto). Próximo passo concreto da Fase 1
 
 ---
 
@@ -161,6 +166,7 @@ O levantamento de fontes já foi feito antes deste projeto virar app desktop —
 | Cripto | Emissão líquida (ETH) | ultrasound.money | — |
 | Cripto | Endereços ativos/transações | Etherscan | — |
 | Cripto | Exchange netflow, MVRV, Puell | CryptoQuant/Glassnode (pago) | manual, link pro dashboard |
+| Cripto | Staking Yield líquido | stakingrewards.com (free tier) | manual |
 | PDF/release não estruturado | Campos qualitativos (landbank, comentários) | pdfplumber + API Claude (schema fixo) | preenchimento manual |
 
 **Etapas**:
@@ -181,10 +187,28 @@ O levantamento de fontes já foi feito antes deste projeto virar app desktop —
 
 **Objetivo**: calcular e salvar preços-teto/valuation com premissas customizáveis, permitindo múltiplos cálculos por ativo.
 
+**Fonte**: `docs/spec_funcional_valuation_e_cripto.md` (entregue na Sessão 1) — tem a fórmula e a guarda de erro de cada modelo, resumidas abaixo.
+
+**7 modelos de ação**:
+| Modelo | Quando usar | Guarda de erro |
+|---|---|---|
+| DCF/FCFF | Empresas "normais" (varejo, indústria, tech, utilities) — não banco/incorporadora | Não calcula se `WACC − g <= 0` |
+| Gordon/DDM | Boa pagadora de dividendo, crescimento previsível | Inválido se `Ke <= g` |
+| Bazin | "Vaca leiteira" (bancão, elétrica, saneamento), foco em yield | — |
+| Graham Number | Filtro rápido, qualquer empresa com lucro/PL positivos | Não calcula se LPA ≤ 0 ou VPA ≤ 0 |
+| Bancos (P/B via ROE-Gordon) | Bancos/instituições financeiras (dívida é matéria-prima, não alavancagem) | Precisa `Ke > g_sustentável` |
+| Incorporadoras (RNAV) | Construtoras — "estoque" é imóvel, não dá pra projetar FCFF trimestre a trimestre | — |
+| Preço Teto Projetivo | Mesma lógica do Bazin, mas projetando N anos e trazendo a valor presente | — |
+
+**Score de cripto (Ethereum, contínuo)**: 9 indicadores, cada um vira verde/vermelho, score = `verdes / 9`. 7-9 verdes = tese intacta, 4-6 = neutro/observar, 0-3 = considerar reduzir. Automatizáveis: Emissão Líquida (ultrasound.money), Staking Yield (stakingrewards.com), TVL DeFi (DefiLlama), Endereços Ativos (Etherscan), Fees vs Emissão (ultrasound.money/Etherscan), NVT (parcial, calculável). Só fallback manual (fonte paga): MVRV Z-Score, Puell Multiple, Exchange Netflow (Glassnode/CryptoQuant).
+
+**⚠️ Importante (do próprio spec)**: os thresholds de sinal (ex: "MVRV < 0 = verde", "Puell > 4 = vermelho") são ponto de partida, **não hardcoded** — o app precisa deixar esses números configuráveis, porque o usuário vai querer calibrar depois de ver os indicadores rodando na prática.
+
 **Etapas**:
-- [ ] 3.1 — Usuário traz a lista de metodologias/fórmulas de preço-teto desejadas (ações e cripto)
-- [ ] 3.2 — Modelar cada metodologia como função pura: premissas (`assumption_set`) → resultado (`valuation_calc`)
-- [ ] 3.3 — Permitir salvar quantos cálculos o usuário quiser por ativo, todos comparáveis lado a lado
+- [x] 3.1 — Lista de metodologias entregue (Sessão 1) — ver tabela acima e `docs/spec_funcional_valuation_e_cripto.md`
+- [ ] 3.2 — Modelar cada metodologia como função pura Rust: inputs (tabela específica do modelo) → resultado (`preco_justo`, `margem_seguranca`, `veredito`), aplicando as guardas de erro
+- [ ] 3.3 — Motor do score cripto: calcular sinal (verde/vermelho) por indicador com threshold configurável, gravar em `cripto_indicadores`, somar o score
+- [ ] 3.4 — Permitir salvar quantos cálculos o usuário quiser por ativo (já é a natureza do schema — cada linha é um cálculo, nada sobrescreve), todos comparáveis lado a lado na UI
 
 ---
 
@@ -232,6 +256,7 @@ O levantamento de fontes já foi feito antes deste projeto virar app desktop —
 | Onde roda a coleta de dados | Dentro do app (Rust) vs. processo separado em Python (herdado do desenho em `docs/spec_automacao_dados.md`) | **Processo separado em Python**, escrevendo no mesmo SQLite ✓ — decidido na Sessão 1. Motivo: evita reescrever em Rust o parsing de CVM/pandas e a extração de PDF, que já foram desenhados em Python e têm bibliotecas maduras lá (pandas, pdfplumber) — Rust ainda não tem equivalente tão bom |
 | Driver SQLite (Rust) | `rusqlite` (síncrono) vs `sqlx` (assíncrono, checagem em compile-time) | **`rusqlite`** ✓ — decidido na Sessão 1. App desktop de usuário único, sem concorrência real de servidor — `sqlx` traria mais setup sem ganho claro aqui |
 | Caminho físico do arquivo SQLite (dev) | Dentro de `desktop/` vs `data-collector/` vs pasta `data/` própria | **`data-collector/practice_valuation.db`** ✓ — decidido na Sessão 1. Rust e Python já rodam no mesmo container, então só precisam apontar pro mesmo arquivo — sem API/rede entre eles. Caminho de produção (fora do Docker, pasta de dados do SO) fica pra Fase 6 |
+| Forma de guardar premissas/resultados de valuation | Uma tabela genérica com premissas em JSON vs uma tabela rígida por modelo | **Uma tabela por modelo** (7 tabelas) ✓ — decidido na Sessão 1, assim que o spec funcional chegou. Motivo: os campos de cada metodologia são conhecidos e estáveis, então colunas tipadas validam melhor as guardas de erro (`WACC−g`, `Ke vs g`, etc.) do que um blob JSON genérico |
 | Sync entre dispositivos/nuvem | Adiado — ver Roadmap | Não é MVP |
 | Densidade visual | Denso (planilha) vs meio-termo vs arejado (dashboard) | **Arejado, tipo dashboard** ✓ — decidido na Sessão 1 |
 | Biblioteca de tabela/grid | AG Grid Community vs Glide Data Grid vs TanStack Table + shadcn/ui | **TanStack Table + shadcn/ui** ✓ — decidido na Sessão 1. Motivo: headless, visual 100% customizável e consistente com o resto do app (mesma base do shadcn/ui), em troca de implementar edição/filtro na mão em vez de ganhar pronto |
@@ -284,14 +309,15 @@ O levantamento de fontes já foi feito antes deste projeto virar app desktop —
     3. Como o `node_modules` já tinha passado por várias tentativas interrompidas (kills no meio da instalação, testando os fixes acima), ficou num estado inconsistente — erro `ENOTEMPTY` do npm tentando renomear uma pasta temporária (`vite` → `.vite-XXXX`). Resolvido apagando `node_modules` por completo (via container, já que os arquivos eram donos de `root`) e reinstalando do zero
   - **Resultado final: o app abre de verdade.** `docker compose up` (ou `./desktop/dev.sh`) sobe o container, `npm install` + `cargo build` rodam dentro dele, e a janela do Tauri aparece na tela do usuário via X11 — confirmado visualmente pelo usuário. Smoke test da Fase 0.5/4 considerado **concluído**
   - **Testado pelo usuário**: botão "Greet" da janela funciona — comunicação React↔Rust via `invoke()` confirmada na prática
-- **Continuação da Sessão 1 (Fase 1 — início da conversa sobre o SQLite)**: explicado como Rust e Python vão acessar o mesmo banco (mesmo container, mesmo arquivo, sem API entre eles). Decidido: driver **`rusqlite`** no Rust (não `sqlx` — sem necessidade de async/compile-time check pra um app de usuário único), modo **WAL** ligado por padrão (Rust e Python são processos diferentes tocando o mesmo arquivo), e o arquivo físico mora em **`data-collector/practice_valuation.db`** (dev). O desenho fino do schema (`assumption_set`/`valuation_calc`) continua em aberto até a lista de metodologias de preço-teto chegar (Fase 3.1) — pra não travar nisso, a ideia é começar com algo flexível (ex: campo JSON pras premissas) em vez de colunas rígidas por metodologia
+- **Continuação da Sessão 1 (Fase 1 — início da conversa sobre o SQLite)**: explicado como Rust e Python vão acessar o mesmo banco (mesmo container, mesmo arquivo, sem API entre eles). Decidido: driver **`rusqlite`** no Rust (não `sqlx` — sem necessidade de async/compile-time check pra um app de usuário único), modo **WAL** ligado por padrão (Rust e Python são processos diferentes tocando o mesmo arquivo), e o arquivo físico mora em **`data-collector/practice_valuation.db`** (dev)
+- **Continuação da Sessão 1 (chegada do spec funcional — desbloqueia Fase 1 e Fase 3)**: usuário trouxe `docs/spec_funcional_valuation_e_cripto.md` com os 7 modelos de valuation de ação (DCF/FCFF, Gordon/DDM, Bazin, Graham, Bancos, RNAV, Preço Teto Projetivo — cada um com inputs, fórmula e guarda de erro) e o score cripto de 9 indicadores (verde/vermelho, automatizáveis vs fallback manual pago). Isso mudou a decisão anterior sobre o schema: em vez de `assumption_set` genérico em JSON, decidido **uma tabela por modelo** (7 tabelas), como o próprio spec sugere — os campos agora são conhecidos e estáveis, então colunas tipadas validam melhor as guardas de erro que um JSON genérico. Fase 1 e Fase 3 atualizadas com o resumo; a spec completa (fórmulas, thresholds) fica no arquivo, não duplicada aqui
 
 **Pendências pra próxima sessão** (em ordem):
-1. Trazer a lista de metodologias/fórmulas de preço-teto (ações e cripto) — Fase 3.1 (desbloqueia o desenho fino do schema da Fase 1)
-2. Implementar a primeira migration (`asset`, `assumption_set`, `valuation_calc`, `tracked_indicator`, `alert`) + adicionar `rusqlite` ao `Cargo.toml`
+1. Implementar a primeira migration (`asset`, as 7 tabelas de valuation, `cripto_indicadores`) + adicionar `rusqlite` ao `Cargo.toml`
+2. Implementar as funções de cálculo dos 7 modelos (Fase 3.2) — funções puras, com as guardas de erro do spec
 3. README.md e LICENSE na raiz do repo ainda não existem (Fase 0.5/6.2/6.3)
 4. Quando o usuário voltar a mexer no TruthID mobile, lembrar que o cache Docker foi limpo (Sessão 1 do Practice Valuation) — primeiro `docker compose up` de lá vai ser mais lento
-5. Se algum dia migrar a imagem Docker (Node/Debian), lembrar dos 3 fixes de rede/instalação acima — não são óbvios e custaram bastante tempo de debug nesta sessão
+5. Se algum dia migrar a imagem Docker (Node/Debian), lembrar dos 3 fixes de rede/instalação da Sessão 1 (IPv6, npm audit, node_modules corrompido) — não são óbvios
 
 ---
 
