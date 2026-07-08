@@ -2,7 +2,7 @@
 
 > Este arquivo é o centro de controle do projeto. Atualizado a cada sessão de trabalho.
 > Pode ser lido por qualquer instância do Claude Code em qualquer máquina para retomar o contexto.
-> Última atualização: 2026-07-08 (Sessão 1, continuação — estrutura inicial do repo criada; pasta local renomeada de `investments` pra `practice-valuation`)
+> Última atualização: 2026-07-08 (Sessão 1, continuação — estrutura do repo criada; `docker compose build` FALHOU por falta de espaço em disco, abortado com segurança pelo monitor)
 
 ---
 
@@ -269,15 +269,17 @@ O levantamento de fontes já foi feito antes deste projeto virar app desktop —
   - `desktop/Dockerfile`, `docker-compose.yml`, `dev.sh` criados (ver "Ambiente de Desenvolvimento")
   - **Incidente**: o disco (32GB, compartilhado com o TruthID) chegou a 100% de uso (0 disponível) durante o build — causou a perda dos 3 arquivos de Docker recém-criados no meio da renomeação da pasta (recriados na sequência, sem perda de mais nada). Limpeza segura rodada (`docker image prune -f`, só imagens órfãs — nada do TruthID foi tocado), liberou 5.8GB
   - **Achado**: `docker-compose.yml` sem `name:` explícito colidiria com o projeto Compose `desktop` do TruthID (mesma pasta `desktop/` nos dois repos) — corrigido com `name: practice-valuation` na primeira linha do arquivo
-  - Ao final da sessão, o `docker compose build` estava rodando em background (monitorado por um script que aborta se o disco ficar abaixo de ~800MB livres) — **ainda não confirmado se terminou com sucesso nem se `npm run tauri dev` sobe a janela**
+  - **`docker compose build` FALHOU** (não confundir com "ainda não testado"): o monitor de segurança abortou o build sozinho quando o disco chegou a ~462MB livres, exatamente como planejado — nenhuma imagem `practice-valuation-desktop` foi gerada. O build tinha acabado de terminar a instalação do Rust (etapa 3 de 7 do Dockerfile) quando foi morto; a etapa seguinte (Python3/pip) nem começou
+  - Depois do abort, disco ficou em **1.5GB livres (96% de uso)** — pior do que antes de tentar (tínhamos 4.9GB livres depois da 1ª limpeza). `docker image prune -f` rodado de novo não liberou nada a mais (`0B`); sobraram 2 containers parados do próprio build interrompido (`quizzical_bell`, `adoring_booth`) que dá pra remover com segurança, mas a remoção foi **bloqueada pelo classificador de segurança do modo automático** (ação irreversível sem o usuário por perto pra confirmar) — ficou pendente, não é do TruthID, só limpar quando o usuário estiver presente
+  - **Conclusão**: os ~4.9GB livres que sobraram da limpeza segura (só imagens órfãs) não foram suficientes pra esse build. Pra realmente conseguir buildar a imagem do `desktop/`, vai precisar de uma das duas rotas discutidas no início da sessão: (a) liberar mais espaço abrindo mão do cache do TruthID (imagem `mobile-flutter` 5.94GB + caches Gradle/NDK ~7.6GB — decisão do usuário, deixa o próximo `docker compose up` do mobile do TruthID mais lento) ou (b) aumentar o disco/mover algo pra outro lugar
 
-**Pendências pra próxima sessão**:
-1. Checar se o `docker compose build` do `desktop/` terminou OK (ver se sobrou alguma imagem `practice-valuation-desktop` e se o disco ficou estável)
-2. Rodar `./desktop/dev.sh` e confirmar que a janela do Tauri abre de verdade (smoke test — o template padrão tem um botão "Greet" que testa a comunicação React↔Rust)
-3. Trazer a lista de metodologias/fórmulas de preço-teto (ações e cripto) — Fase 3.1
-4. Decidir onde o arquivo SQLite físico vai morar (Fase 1) e começar o schema (`asset`, `assumption_set`, `valuation_calc`, `tracked_indicator`, `alert`)
-5. README.md e LICENSE na raiz do repo ainda não existem (Fase 0.5/6.2/6.3)
-6. Se o disco apertar de novo: `docker image prune -f` é sempre seguro; ir além disso (limpar cache do TruthID) é decisão do usuário
+**Pendências pra próxima sessão** (em ordem):
+1. **Decidir como liberar espaço em disco antes de tentar o build de novo** (ver conclusão acima — provavelmente vai exigir abrir mão de cache do TruthID, ou outra fonte de espaço)
+2. Remover os containers órfãos do build falhado (`docker rm quizzical_bell adoring_booth`) — seguro, mas precisa do usuário presente pra confirmar (bloqueado pelo modo automático)
+3. Rodar `docker compose build` de novo (com o monitor de disco) e, se terminar OK, `./desktop/dev.sh` pra confirmar que a janela do Tauri abre de verdade (smoke test — o template padrão tem um botão "Greet" que testa a comunicação React↔Rust)
+4. Trazer a lista de metodologias/fórmulas de preço-teto (ações e cripto) — Fase 3.1
+5. Decidir onde o arquivo SQLite físico vai morar (Fase 1) e começar o schema (`asset`, `assumption_set`, `valuation_calc`, `tracked_indicator`, `alert`)
+6. README.md e LICENSE na raiz do repo ainda não existem (Fase 0.5/6.2/6.3)
 
 ---
 
