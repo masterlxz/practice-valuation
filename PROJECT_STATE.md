@@ -2,7 +2,7 @@
 
 > Este arquivo é o centro de controle do projeto. Atualizado a cada sessão de trabalho.
 > Pode ser lido por qualquer instância do Claude Code em qualquer máquina para retomar o contexto.
-> Última atualização: 2026-07-08 (Sessão 1, continuação — smoke test concluído: `./desktop/dev.sh` builda e abre a janela do Tauri de verdade, confirmado pelo usuário)
+> Última atualização: 2026-07-08 (Sessão 1, continuação — botão Greet confirmado; driver SQLite (rusqlite) e WAL decididos, schema fino aguarda lista de metodologias)
 
 ---
 
@@ -69,16 +69,15 @@ Substitui a ideia original de planilha (ver `docs/spec_automacao_dados.md`, hist
 
 **Ainda não decidido**:
 - Biblioteca de gráfico (pra tela de cripto/indicadores, Fase 4.3) — avaliar quando chegar lá (candidatos: Recharts, ou lightweight-charts da TradingView, mais voltada pra preço/candlestick)
-- Onde/como o Python roda (script chamado sob demanda pelo Tauri, ou cron independente, ou serviço que o app dispara)
-- Lista exata de metodologias de preço-teto (o usuário vai trazer sua lista numa próxima sessão)
+- Lista exata de metodologias de preço-teto (o usuário vai trazer sua lista numa próxima sessão) — isso também trava o desenho fino de `assumption_set`/`valuation_calc` na Fase 1
 
 ---
 
 ## Status Geral
 
 ```
-Fase 0 — Fundamentos & Decisões de Arquitetura   [ ] Não iniciada
-Fase 1 — Modelo de Dados (schema do banco local)  [ ] Não iniciada
+Fase 0 — Fundamentos & Decisões de Arquitetura   [~] Em andamento (0.1–0.5 ✓, falta 0.6)
+Fase 1 — Modelo de Dados (schema do banco local)  [~] Em andamento (driver + WAL decididos, schema em aberto)
 Fase 2 — Coleta de Dados (ações BR + cripto)      [ ] Não iniciada
 Fase 3 — Motor de Cálculo (preço-teto/valuation)  [ ] Não iniciada
 Fase 4 — Interface Desktop                        [ ] Não iniciada
@@ -134,10 +133,13 @@ Criado na Fase 0.5: `desktop/Dockerfile`, `desktop/docker-compose.yml`, `desktop
 - `tracked_indicator` — indicador monitorado por ativo (ex: preço, P/L, TVL, emissão líquida) com a regra de "zona de compra"
 - `alert` — disparo gerado quando um `tracked_indicator` entra na zona configurada
 
+**Como Rust e Python acessam o mesmo banco**: os dois já rodam dentro do mesmo container (decisão da Fase 0 — stack híbrida), então não precisa de rede/API entre eles — só apontar os dois pro mesmo arquivo `.db`. Arquivo físico decidido: `data-collector/practice_valuation.db` (já coberto pelo `*.db` do `.gitignore` da raiz; a pasta já é bind-mount, então o arquivo sobrevive entre execuções do container).
+
 **Etapas**:
-- [ ] 1.1 — Validar o rascunho de entidades acima com o usuário
-- [ ] 1.2 — Escolher engine de banco local e ORM/driver (depende da Fase 0)
-- [ ] 1.3 — Migrations iniciais
+- [ ] 1.1 — Validar o rascunho de entidades acima com o usuário (parcialmente amarrado à Fase 3.1 — a lista de metodologias de preço-teto ainda não chegou, então os campos de `assumption_set`/`valuation_calc` provavelmente começam como algo flexível tipo JSON em vez de colunas rígidas, pra não travar nisso)
+- [x] 1.2 — Driver Rust: **`rusqlite`** (síncrono, direto) em vez de `sqlx` (assíncrono, checagem em compile-time) — decidido na Sessão 1. Motivo: app desktop de usuário único, não é servidor com concorrência real; `sqlx` traria mais setup sem benefício claro aqui
+- [x] 1.2b — **Modo WAL** (Write-Ahead Log) do SQLite será ligado por padrão — Rust e Python são processos diferentes lendo/escrevendo o mesmo arquivo, e WAL deixa isso coexistir melhor (menos "database is locked")
+- [ ] 1.3 — Migrations iniciais (abordagem simples: arquivos SQL versionados aplicados em ordem, sem framework pesado — combina com o "só precisa funcionar" da filosofia do projeto)
 
 ---
 
@@ -227,7 +229,9 @@ O levantamento de fontes já foi feito antes deste projeto virar app desktop —
 | Nome do projeto | — | **Practice Valuation** (`practice-valuation`) ✓ — decidido na Sessão 1 |
 | Framework do app desktop | Python (PySide6/Qt, Flet, etc.) vs Tauri (Rust+React/TS) vs Electron vs Flutter Desktop | **Tauri + Rust + React/TypeScript** ✓ — decidido na Sessão 1. Motivo: reaproveita o padrão já validado no TruthID (keyring do SO, empacotamento multi-plataforma via GitHub Actions), e React/TS tem ecossistema forte pra UI densa em dados (tabelas, gráficos) |
 | Banco de dados local | SQLite vs DuckDB | **SQLite** ✓ — decidido na Sessão 1 junto com a decisão de stack híbrida (precisa ser lido/escrito tanto pelo Rust quanto pelo Python, e SQLite tem driver maduro nos dois: `sqlx`/`rusqlite` e `sqlite3`) |
-| Onde roda a coleta de dados | Dentro do app (Rust) vs. processo separado em Python (herdado do desenho em `docs/spec_automacao_dados.md`) | **Processo separado em Python**, escrevendo no mesmo SQLite ✓ — decidido na Sessão 1. Motivo: evita reescrever em Rust o parsing de CVM/pandas e a extração de PDF, que já foram desenhados em Python e têm bibliotecas maduras lá (pandas, pdfplumber) — Rust ainda não tem equivalente tão bom. Falta decidir *como* o Python roda (script sob demanda disparado pelo Tauri, cron independente, etc. — ver Fase 2.1) |
+| Onde roda a coleta de dados | Dentro do app (Rust) vs. processo separado em Python (herdado do desenho em `docs/spec_automacao_dados.md`) | **Processo separado em Python**, escrevendo no mesmo SQLite ✓ — decidido na Sessão 1. Motivo: evita reescrever em Rust o parsing de CVM/pandas e a extração de PDF, que já foram desenhados em Python e têm bibliotecas maduras lá (pandas, pdfplumber) — Rust ainda não tem equivalente tão bom |
+| Driver SQLite (Rust) | `rusqlite` (síncrono) vs `sqlx` (assíncrono, checagem em compile-time) | **`rusqlite`** ✓ — decidido na Sessão 1. App desktop de usuário único, sem concorrência real de servidor — `sqlx` traria mais setup sem ganho claro aqui |
+| Caminho físico do arquivo SQLite (dev) | Dentro de `desktop/` vs `data-collector/` vs pasta `data/` própria | **`data-collector/practice_valuation.db`** ✓ — decidido na Sessão 1. Rust e Python já rodam no mesmo container, então só precisam apontar pro mesmo arquivo — sem API/rede entre eles. Caminho de produção (fora do Docker, pasta de dados do SO) fica pra Fase 6 |
 | Sync entre dispositivos/nuvem | Adiado — ver Roadmap | Não é MVP |
 | Densidade visual | Denso (planilha) vs meio-termo vs arejado (dashboard) | **Arejado, tipo dashboard** ✓ — decidido na Sessão 1 |
 | Biblioteca de tabela/grid | AG Grid Community vs Glide Data Grid vs TanStack Table + shadcn/ui | **TanStack Table + shadcn/ui** ✓ — decidido na Sessão 1. Motivo: headless, visual 100% customizável e consistente com o resto do app (mesma base do shadcn/ui), em troca de implementar edição/filtro na mão em vez de ganhar pronto |
@@ -279,14 +283,15 @@ O levantamento de fontes já foi feito antes deste projeto virar app desktop —
     2. Depois desse fix, travava de novo especificamente na etapa de `npm audit` (uma chamada de rede separada, que não respeitava o mesmo fix). Corrigido pulando essa etapa: `command: npm install --no-audit --no-fund && npm run tauri dev`
     3. Como o `node_modules` já tinha passado por várias tentativas interrompidas (kills no meio da instalação, testando os fixes acima), ficou num estado inconsistente — erro `ENOTEMPTY` do npm tentando renomear uma pasta temporária (`vite` → `.vite-XXXX`). Resolvido apagando `node_modules` por completo (via container, já que os arquivos eram donos de `root`) e reinstalando do zero
   - **Resultado final: o app abre de verdade.** `docker compose up` (ou `./desktop/dev.sh`) sobe o container, `npm install` + `cargo build` rodam dentro dele, e a janela do Tauri aparece na tela do usuário via X11 — confirmado visualmente pelo usuário. Smoke test da Fase 0.5/4 considerado **concluído**
+  - **Testado pelo usuário**: botão "Greet" da janela funciona — comunicação React↔Rust via `invoke()` confirmada na prática
+- **Continuação da Sessão 1 (Fase 1 — início da conversa sobre o SQLite)**: explicado como Rust e Python vão acessar o mesmo banco (mesmo container, mesmo arquivo, sem API entre eles). Decidido: driver **`rusqlite`** no Rust (não `sqlx` — sem necessidade de async/compile-time check pra um app de usuário único), modo **WAL** ligado por padrão (Rust e Python são processos diferentes tocando o mesmo arquivo), e o arquivo físico mora em **`data-collector/practice_valuation.db`** (dev). O desenho fino do schema (`assumption_set`/`valuation_calc`) continua em aberto até a lista de metodologias de preço-teto chegar (Fase 3.1) — pra não travar nisso, a ideia é começar com algo flexível (ex: campo JSON pras premissas) em vez de colunas rígidas por metodologia
 
 **Pendências pra próxima sessão** (em ordem):
-1. Testar o botão "Greet" na janela aberta (smoke test da comunicação React↔Rust via `invoke()`) — só visual, não testado a fundo ainda
-2. Trazer a lista de metodologias/fórmulas de preço-teto (ações e cripto) — Fase 3.1
-3. Decidir onde o arquivo SQLite físico vai morar (Fase 1) e começar o schema (`asset`, `assumption_set`, `valuation_calc`, `tracked_indicator`, `alert`)
-4. README.md e LICENSE na raiz do repo ainda não existem (Fase 0.5/6.2/6.3)
-5. Quando o usuário voltar a mexer no TruthID mobile, lembrar que o cache Docker foi limpo (Sessão 1 do Practice Valuation) — primeiro `docker compose up` de lá vai ser mais lento
-6. Se algum dia migrar a imagem Docker (Node/Debian), lembrar dos 3 fixes de rede/instalação acima — não são óbvios e custaram bastante tempo de debug nesta sessão
+1. Trazer a lista de metodologias/fórmulas de preço-teto (ações e cripto) — Fase 3.1 (desbloqueia o desenho fino do schema da Fase 1)
+2. Implementar a primeira migration (`asset`, `assumption_set`, `valuation_calc`, `tracked_indicator`, `alert`) + adicionar `rusqlite` ao `Cargo.toml`
+3. README.md e LICENSE na raiz do repo ainda não existem (Fase 0.5/6.2/6.3)
+4. Quando o usuário voltar a mexer no TruthID mobile, lembrar que o cache Docker foi limpo (Sessão 1 do Practice Valuation) — primeiro `docker compose up` de lá vai ser mais lento
+5. Se algum dia migrar a imagem Docker (Node/Debian), lembrar dos 3 fixes de rede/instalação acima — não são óbvios e custaram bastante tempo de debug nesta sessão
 
 ---
 
