@@ -2,7 +2,7 @@
 
 > Este arquivo é o centro de controle do projeto. Atualizado a cada sessão de trabalho.
 > Pode ser lido por qualquer instância do Claude Code em qualquer máquina para retomar o contexto.
-> Última atualização: 2026-07-08 (Sessão 1, continuação — direção visual/UI decidida: Tailwind + shadcn/ui + TanStack Table, visual arejado tipo dashboard)
+> Última atualização: 2026-07-08 (Sessão 1, continuação — mecanismo do botão "Run" da coleta de dados + ambiente de dev via Docker)
 
 ---
 
@@ -79,6 +79,16 @@ Fase 6 — Publicação (GitHub público)               [ ] Não iniciada
 
 ---
 
+## Ambiente de Desenvolvimento
+
+**Docker** — decidido na Sessão 1, mesmo padrão usado no TruthID: um único container com Node + Rust + WebKitGTK (pra abrir a janela do Tauri) e também **Python3 + venv** (pra rodar os coletores de dados chamados pelo próprio app). `docker compose up` sobe tudo, X11 do host repassado pro container pra a janela do app aparecer na tela — nada precisa ser instalado na máquina.
+
+Diferente do TruthID (que precisava de acesso a USB pra Ledger), este projeto não mexe com hardware — o container fica mais simples e menos privilegiado (sem `privileged: true`, sem montar `/dev`).
+
+A ser criado na Fase 0.5 (estrutura do repositório): `Dockerfile`, `docker-compose.yml`, `dev.sh` (`xhost +local:docker && docker compose up`).
+
+---
+
 ## Fases Detalhadas
 
 ### Fase 0 — Fundamentos & Decisões de Arquitetura
@@ -134,7 +144,13 @@ O levantamento de fontes já foi feito antes deste projeto virar app desktop —
 | PDF/release não estruturado | Campos qualitativos (landbank, comentários) | pdfplumber + API Claude (schema fixo) | preenchimento manual |
 
 **Etapas**:
-- [x] 2.1 — Decidir onde a coleta roda → **processo Python separado**, escrevendo direto no SQLite local (decidido na Sessão 1, junto com a Fase 0). Falta decidir *como* ele é disparado (sob demanda pelo app Tauri, cron independente, etc.)
+- [x] 2.1 — Decidir onde/como a coleta roda → **processo Python separado**, disparado **manualmente por um botão na UI** ("Run"/"Atualizar dados"), sem cron/scheduler. Decidido na Sessão 1. Mecanismo:
+  - Frontend: botão chama `invoke()` de um comando Tauri
+  - Backend (Rust): comando assíncrono dispara o script Python como subprocesso (não trava a UI), espera terminar
+  - Python: puxa os dados das fontes e grava direto no SQLite compartilhado
+  - Frontend: enquanto roda, mostra spinner; ao terminar, mostra um resumo (quantos ativos, sucesso/erro) — sem log ao vivo linha a linha por enquanto (pode vir depois se sentir falta)
+  - **Guarda contra clique duplo/spam**: desabilitar o botão no frontend enquanto roda **e** ter uma trava no lado Rust (ex: `Mutex`/flag no estado do app) que recusa uma segunda chamada concorrente mesmo se disparada rápido demais — evita dois processos Python escrevendo no mesmo SQLite ao mesmo tempo e evita estourar rate limit das APIs gratuitas
+  - A Fase 5 (alertas) pode um dia precisar de checagem periódica dos indicadores **já salvos** — isso é diferente de "puxar dado novo" e fica pra quando chegarmos lá
 - [ ] 2.2 — Implementar clientes de fonte de dados de ações (bolsai, brapi, CVM)
 - [ ] 2.3 — Implementar clientes de fonte de dados de cripto (CoinGecko, DefiLlama, ultrasound.money, Etherscan)
 - [ ] 2.4 — Fallback de extração via PDF (pdfplumber + Claude), quando necessário
@@ -199,6 +215,8 @@ O levantamento de fontes já foi feito antes deste projeto virar app desktop —
 | Biblioteca de tabela/grid | AG Grid Community vs Glide Data Grid vs TanStack Table + shadcn/ui | **TanStack Table + shadcn/ui** ✓ — decidido na Sessão 1. Motivo: headless, visual 100% customizável e consistente com o resto do app (mesma base do shadcn/ui), em troca de implementar edição/filtro na mão em vez de ganhar pronto |
 | Sistema de componentes | shadcn/ui vs Mantine vs Ant Design | **shadcn/ui** (Radix + Tailwind) ✓ — decidido na Sessão 1. Componentes copiados pro repo, visual moderno/neutro, fácil de customizar |
 | Biblioteca de gráfico | Recharts vs lightweight-charts (TradingView) vs outra | Pendente — avaliar na Fase 4.3 |
+| Gatilho da coleta de dados | Botão manual vs cron/scheduler periódico | **Botão manual** ✓ — decidido na Sessão 1. Rust dispara o Python como subprocesso, sem periodicidade automática por enquanto |
+| Ambiente de desenvolvimento | Instalar tudo no host vs Docker | **Docker** ✓ — decidido na Sessão 1, mesmo padrão do TruthID (container único com Node+Rust+WebKitGTK+Python), sem precisar instalar nada na máquina |
 
 ---
 
@@ -224,7 +242,8 @@ O levantamento de fontes já foi feito antes deste projeto virar app desktop —
 - Repo público criado no GitHub (`github.com/masterlxz/practice-valuation`), remote conectado, `.gitignore` de segurança criado, primeiro commit (`PROJECT_STATE.md` + `docs/`) feito e pushado
 - **Continuação da Sessão 1**: decidida a stack — **Tauri + Rust + React/TypeScript** pro app (mesmo padrão do TruthID) + **coleta de dados em Python** (reaproveita o desenho do `docs/spec_automacao_dados.md`) + **SQLite** como banco local compartilhado entre os dois. Trade-off discutido: reescrever a coleta em Rust custaria abrir mão de pandas/pdfplumber sem ganho real, já que a UI é a parte que se beneficia do React/TS, não a coleta
 - **Continuação da Sessão 1 (direção visual/UI, Fase 0.4)**: decidido **Tailwind CSS + shadcn/ui (Radix) + TanStack Table**, com visual **arejado tipo dashboard** — não denso tipo planilha, apesar da ideia original de "planilha" (isso ficou reservado pro comportamento/dado — múltiplos cálculos salvos, edição manual — não pra densidade visual da tela)
-- Próximo passo sugerido: decidir como o processo Python é disparado pelo app (Fase 2.1), ou já começar a estruturar o repositório (Fase 0.5)
+- **Continuação da Sessão 1 (Fase 2.1 + ambiente de dev)**: decidido que a coleta de dados roda sob demanda, via **botão manual** na UI (sem cron) — o Rust dispara o script Python como subprocesso assíncrono, e o feedback na tela é spinner + resumo final (sem log ao vivo por enquanto). Ponto de atenção levantado pelo usuário: **evitar spam de clique** — precisa desabilitar o botão no frontend e ter uma trava no Rust (mutex/flag) pra recusar uma segunda execução concorrente. Decidido também: ambiente de desenvolvimento via **Docker**, mesmo padrão do TruthID (container com Node+Rust+WebKitGTK+Python, X11 repassado, sem instalar nada no host)
+- Próximo passo sugerido: Fase 0.5 — estruturar o repositório de verdade (scaffold do Tauri+React+TS, pasta do coletor Python, `Dockerfile`/`docker-compose.yml`/`dev.sh`)
 
 ---
 
