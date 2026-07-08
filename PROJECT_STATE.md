@@ -2,7 +2,7 @@
 
 > Este arquivo é o centro de controle do projeto. Atualizado a cada sessão de trabalho.
 > Pode ser lido por qualquer instância do Claude Code em qualquer máquina para retomar o contexto.
-> Última atualização: 2026-07-08 (Sessão 1, continuação — stack decidida: Tauri/Rust/React+TS + coleta em Python via SQLite compartilhado)
+> Última atualização: 2026-07-08 (Sessão 1, continuação — direção visual/UI decidida: Tailwind + shadcn/ui + TanStack Table, visual arejado tipo dashboard)
 
 ---
 
@@ -56,8 +56,10 @@ Substitui a ideia original de planilha (ver `docs/spec_automacao_dados.md`, hist
 **Decidido até agora** (ver "Decisões de Arquitetura em Aberto"):
 - Stack híbrida: app em **Tauri + Rust + React/TypeScript** (reaproveitando o padrão do TruthID), coleta de dados em **Python** (reaproveitando o desenho do `docs/spec_automacao_dados.md`), os dois se comunicando só através de um banco **SQLite** local compartilhado — sem API/IPC entre eles
 
+- UI: **Tailwind CSS + shadcn/ui (Radix) + TanStack Table**, visual **arejado tipo dashboard** (não denso tipo planilha, apesar da ideia original de "funcionar como planilha" — isso ficou pro comportamento/dado, não pra densidade visual)
+
 **Ainda não decidido**:
-- Visual/UI (direção visual, bibliotecas de tabela/gráfico no React)
+- Biblioteca de gráfico (pra tela de cripto/indicadores, Fase 4.3) — avaliar quando chegar lá (candidatos: Recharts, ou lightweight-charts da TradingView, mais voltada pra preço/candlestick)
 - Onde/como o Python roda (script chamado sob demanda pelo Tauri, ou cron independente, ou serviço que o app dispara)
 - Lista exata de metodologias de preço-teto (o usuário vai trazer sua lista numa próxima sessão)
 
@@ -87,7 +89,7 @@ Fase 6 — Publicação (GitHub público)               [ ] Não iniciada
 - [x] 0.1 — Nome do projeto → **Practice Valuation** (repo: `practice-valuation`), decidido na Sessão 1
 - [x] 0.2 — Framework do app desktop → **Tauri + Rust + React/TypeScript** (mesmo padrão do TruthID), decidido na Sessão 1
 - [x] 0.3 — Banco de dados local → **SQLite** (compartilhado entre o app Tauri/Rust e os coletores em Python), decidido na Sessão 1
-- [ ] 0.4 — Escolher stack/lib de UI e uma direção visual inicial (bem simples, "planilha-like")
+- [x] 0.4 — Stack/lib de UI e direção visual → **Tailwind + shadcn/ui + TanStack Table**, visual **arejado tipo dashboard** (não denso), decidido na Sessão 1
 - [ ] 0.5 — Estrutura inicial do repositório (pastas, README, LICENSE, `.gitignore` já criado)
 - [ ] 0.6 — Checklist de segurança aplicado desde o primeiro commit (ver "Diretriz de segurança" acima)
 
@@ -159,7 +161,7 @@ O levantamento de fontes já foi feito antes deste projeto virar app desktop —
 - [ ] 4.2 — Tela: detalhe do ativo (premissas + histórico de cálculos salvos)
 - [ ] 4.3 — Tela: cripto/indicadores
 - [ ] 4.4 — Tela: alertas/zona de compra
-- [ ] 4.5 — Direção visual (a decidir com o usuário — provavelmente algo denso em dados, tipo planilha, não um app "bonito" com muito espaço em branco)
+- [x] 4.5 — Direção visual → **arejado, tipo dashboard** (Tailwind + shadcn/ui + TanStack Table), decidido na Sessão 1
 
 ---
 
@@ -193,6 +195,10 @@ O levantamento de fontes já foi feito antes deste projeto virar app desktop —
 | Banco de dados local | SQLite vs DuckDB | **SQLite** ✓ — decidido na Sessão 1 junto com a decisão de stack híbrida (precisa ser lido/escrito tanto pelo Rust quanto pelo Python, e SQLite tem driver maduro nos dois: `sqlx`/`rusqlite` e `sqlite3`) |
 | Onde roda a coleta de dados | Dentro do app (Rust) vs. processo separado em Python (herdado do desenho em `docs/spec_automacao_dados.md`) | **Processo separado em Python**, escrevendo no mesmo SQLite ✓ — decidido na Sessão 1. Motivo: evita reescrever em Rust o parsing de CVM/pandas e a extração de PDF, que já foram desenhados em Python e têm bibliotecas maduras lá (pandas, pdfplumber) — Rust ainda não tem equivalente tão bom. Falta decidir *como* o Python roda (script sob demanda disparado pelo Tauri, cron independente, etc. — ver Fase 2.1) |
 | Sync entre dispositivos/nuvem | Adiado — ver Roadmap | Não é MVP |
+| Densidade visual | Denso (planilha) vs meio-termo vs arejado (dashboard) | **Arejado, tipo dashboard** ✓ — decidido na Sessão 1 |
+| Biblioteca de tabela/grid | AG Grid Community vs Glide Data Grid vs TanStack Table + shadcn/ui | **TanStack Table + shadcn/ui** ✓ — decidido na Sessão 1. Motivo: headless, visual 100% customizável e consistente com o resto do app (mesma base do shadcn/ui), em troca de implementar edição/filtro na mão em vez de ganhar pronto |
+| Sistema de componentes | shadcn/ui vs Mantine vs Ant Design | **shadcn/ui** (Radix + Tailwind) ✓ — decidido na Sessão 1. Componentes copiados pro repo, visual moderno/neutro, fácil de customizar |
+| Biblioteca de gráfico | Recharts vs lightweight-charts (TradingView) vs outra | Pendente — avaliar na Fase 4.3 |
 
 ---
 
@@ -217,7 +223,8 @@ O levantamento de fontes já foi feito antes deste projeto virar app desktop —
 - Pendente pro usuário: trazer a lista de metodologias/fórmulas de preço-teto desejadas (ações e cripto)
 - Repo público criado no GitHub (`github.com/masterlxz/practice-valuation`), remote conectado, `.gitignore` de segurança criado, primeiro commit (`PROJECT_STATE.md` + `docs/`) feito e pushado
 - **Continuação da Sessão 1**: decidida a stack — **Tauri + Rust + React/TypeScript** pro app (mesmo padrão do TruthID) + **coleta de dados em Python** (reaproveita o desenho do `docs/spec_automacao_dados.md`) + **SQLite** como banco local compartilhado entre os dois. Trade-off discutido: reescrever a coleta em Rust custaria abrir mão de pandas/pdfplumber sem ganho real, já que a UI é a parte que se beneficia do React/TS, não a coleta
-- Próximo passo sugerido: decidir a direção visual/UI (Fase 0.4) e como o processo Python é disparado pelo app (Fase 2.1)
+- **Continuação da Sessão 1 (direção visual/UI, Fase 0.4)**: decidido **Tailwind CSS + shadcn/ui (Radix) + TanStack Table**, com visual **arejado tipo dashboard** — não denso tipo planilha, apesar da ideia original de "planilha" (isso ficou reservado pro comportamento/dado — múltiplos cálculos salvos, edição manual — não pra densidade visual da tela)
+- Próximo passo sugerido: decidir como o processo Python é disparado pelo app (Fase 2.1), ou já começar a estruturar o repositório (Fase 0.5)
 
 ---
 
