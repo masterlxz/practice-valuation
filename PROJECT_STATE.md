@@ -2,7 +2,7 @@
 
 > Este arquivo é o centro de controle do projeto. Atualizado a cada sessão de trabalho.
 > Pode ser lido por qualquer instância do Claude Code em qualquer máquina para retomar o contexto.
-> Última atualização: 2026-07-08 (Sessão 1 — criação do projeto, nome escolhido, escopo inicial definido)
+> Última atualização: 2026-07-08 (Sessão 1, continuação — stack decidida: Tauri/Rust/React+TS + coleta em Python via SQLite compartilhado)
 
 ---
 
@@ -53,10 +53,12 @@ Substitui a ideia original de planilha (ver `docs/spec_automacao_dados.md`, hist
 - Avisar o usuário quando um ativo entrar em "zona de compra" segundo as premissas cadastradas
 - Banco de dados **local** por enquanto — sync entre máquinas/nuvem é ideia pra mais adiante (ver Roadmap)
 
-**Ainda não decidido** (a decidir junto, com calma — ver "Decisões de Arquitetura em Aberto"):
-- Framework do app desktop
-- Banco de dados local
-- Visual/UI
+**Decidido até agora** (ver "Decisões de Arquitetura em Aberto"):
+- Stack híbrida: app em **Tauri + Rust + React/TypeScript** (reaproveitando o padrão do TruthID), coleta de dados em **Python** (reaproveitando o desenho do `docs/spec_automacao_dados.md`), os dois se comunicando só através de um banco **SQLite** local compartilhado — sem API/IPC entre eles
+
+**Ainda não decidido**:
+- Visual/UI (direção visual, bibliotecas de tabela/gráfico no React)
+- Onde/como o Python roda (script chamado sob demanda pelo Tauri, ou cron independente, ou serviço que o app dispara)
 - Lista exata de metodologias de preço-teto (o usuário vai trazer sua lista numa próxima sessão)
 
 ---
@@ -83,10 +85,10 @@ Fase 6 — Publicação (GitHub público)               [ ] Não iniciada
 
 **Etapas**:
 - [x] 0.1 — Nome do projeto → **Practice Valuation** (repo: `practice-valuation`), decidido na Sessão 1
-- [ ] 0.2 — Escolher framework do app desktop (ver "Decisões de Arquitetura em Aberto")
-- [ ] 0.3 — Escolher banco de dados local
+- [x] 0.2 — Framework do app desktop → **Tauri + Rust + React/TypeScript** (mesmo padrão do TruthID), decidido na Sessão 1
+- [x] 0.3 — Banco de dados local → **SQLite** (compartilhado entre o app Tauri/Rust e os coletores em Python), decidido na Sessão 1
 - [ ] 0.4 — Escolher stack/lib de UI e uma direção visual inicial (bem simples, "planilha-like")
-- [ ] 0.5 — Estrutura inicial do repositório (pastas, README, LICENSE, `.gitignore`)
+- [ ] 0.5 — Estrutura inicial do repositório (pastas, README, LICENSE, `.gitignore` já criado)
 - [ ] 0.6 — Checklist de segurança aplicado desde o primeiro commit (ver "Diretriz de segurança" acima)
 
 ---
@@ -130,7 +132,7 @@ O levantamento de fontes já foi feito antes deste projeto virar app desktop —
 | PDF/release não estruturado | Campos qualitativos (landbank, comentários) | pdfplumber + API Claude (schema fixo) | preenchimento manual |
 
 **Etapas**:
-- [ ] 2.1 — Decidir onde a coleta roda: dentro do próprio app vs. processo/serviço separado que escreve no banco local
+- [x] 2.1 — Decidir onde a coleta roda → **processo Python separado**, escrevendo direto no SQLite local (decidido na Sessão 1, junto com a Fase 0). Falta decidir *como* ele é disparado (sob demanda pelo app Tauri, cron independente, etc.)
 - [ ] 2.2 — Implementar clientes de fonte de dados de ações (bolsai, brapi, CVM)
 - [ ] 2.3 — Implementar clientes de fonte de dados de cripto (CoinGecko, DefiLlama, ultrasound.money, Etherscan)
 - [ ] 2.4 — Fallback de extração via PDF (pdfplumber + Claude), quando necessário
@@ -187,9 +189,9 @@ O levantamento de fontes já foi feito antes deste projeto virar app desktop —
 | Decisão | Opções | Status |
 |---|---|---|
 | Nome do projeto | — | **Practice Valuation** (`practice-valuation`) ✓ — decidido na Sessão 1 |
-| Framework do app desktop | Python (PySide6/Qt, Flet, etc.) vs Tauri (Rust+React/TS) vs Electron vs Flutter Desktop | Pendente — a discutir com trade-offs na próxima sessão |
-| Banco de dados local | SQLite vs DuckDB | Pendente |
-| Onde roda a coleta de dados | Dentro do próprio app vs. processo separado (herdado do desenho em `docs/spec_automacao_dados.md`) que escreve no banco local | Pendente |
+| Framework do app desktop | Python (PySide6/Qt, Flet, etc.) vs Tauri (Rust+React/TS) vs Electron vs Flutter Desktop | **Tauri + Rust + React/TypeScript** ✓ — decidido na Sessão 1. Motivo: reaproveita o padrão já validado no TruthID (keyring do SO, empacotamento multi-plataforma via GitHub Actions), e React/TS tem ecossistema forte pra UI densa em dados (tabelas, gráficos) |
+| Banco de dados local | SQLite vs DuckDB | **SQLite** ✓ — decidido na Sessão 1 junto com a decisão de stack híbrida (precisa ser lido/escrito tanto pelo Rust quanto pelo Python, e SQLite tem driver maduro nos dois: `sqlx`/`rusqlite` e `sqlite3`) |
+| Onde roda a coleta de dados | Dentro do app (Rust) vs. processo separado em Python (herdado do desenho em `docs/spec_automacao_dados.md`) | **Processo separado em Python**, escrevendo no mesmo SQLite ✓ — decidido na Sessão 1. Motivo: evita reescrever em Rust o parsing de CVM/pandas e a extração de PDF, que já foram desenhados em Python e têm bibliotecas maduras lá (pandas, pdfplumber) — Rust ainda não tem equivalente tão bom. Falta decidir *como* o Python roda (script sob demanda disparado pelo Tauri, cron independente, etc. — ver Fase 2.1) |
 | Sync entre dispositivos/nuvem | Adiado — ver Roadmap | Não é MVP |
 
 ---
@@ -213,7 +215,9 @@ O levantamento de fontes já foi feito antes deste projeto virar app desktop —
 - Criado o `PROJECT_STATE.md` (este arquivo), modelado a partir do `PROJECT_STATE.md` do projeto TruthID
 - Escopo inicial levantado: múltiplos preços-teto salvos por ativo com premissas diferentes, cripto com premissas + monitoramento de indicadores, alerta de zona de compra
 - Pendente pro usuário: trazer a lista de metodologias/fórmulas de preço-teto desejadas (ações e cripto)
-- Próximo passo sugerido: decidir framework do app desktop (Fase 0.2) — Claude deve apresentar opções com trade-offs, não decidir sozinho
+- Repo público criado no GitHub (`github.com/masterlxz/practice-valuation`), remote conectado, `.gitignore` de segurança criado, primeiro commit (`PROJECT_STATE.md` + `docs/`) feito e pushado
+- **Continuação da Sessão 1**: decidida a stack — **Tauri + Rust + React/TypeScript** pro app (mesmo padrão do TruthID) + **coleta de dados em Python** (reaproveita o desenho do `docs/spec_automacao_dados.md`) + **SQLite** como banco local compartilhado entre os dois. Trade-off discutido: reescrever a coleta em Rust custaria abrir mão de pandas/pdfplumber sem ganho real, já que a UI é a parte que se beneficia do React/TS, não a coleta
+- Próximo passo sugerido: decidir a direção visual/UI (Fase 0.4) e como o processo Python é disparado pelo app (Fase 2.1)
 
 ---
 
