@@ -1,0 +1,28 @@
+# secrets / credentials
+.env
+.env.*
+!.env.example
+.credentials/
+*service_account*.json
+
+# local database
+*.db
+*.sqlite
+*.sqlite3
+
+# python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# node
+node_modules/
+
+# build/dist
+dist/
+build/
+target/
+
+# OS/editor
+.DS_Store
