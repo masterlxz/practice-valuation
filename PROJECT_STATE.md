@@ -102,6 +102,25 @@ Criado na Fase 0.5: `desktop/Dockerfile`, `desktop/docker-compose.yml`, `desktop
 
 ---
 
+## Arquitetura de Código
+
+Decidido na Sessão 1: mesmo sendo um projeto pessoal, vale organizar bem desde o início — "fácil manutenção" não significa construir mais funcionalidade agora, significa estruturar bem o pouco que já existe.
+
+**Camadas no lado Rust** (convenção adotada, aplica a partir da Fase 3):
+- **`commands/`** — a "cola" exposta ao React via `invoke()`. Fina: só recebe o pedido e chama a camada de baixo, não tem regra de negócio
+- **`domain/`** (ou `valuation/`) — as funções puras de cálculo (Bazin, DCF, etc.) e a lógica do score cripto. Não sabem nada de banco nem de Tauri — só recebem números/dados, devolvem números/resultado. É a "função pura" já mencionada na Fase 3, só que com um lugar físico definido
+- **Repository/entities (SeaORM)** — só sabe conversar com o banco
+
+Princípio: não misturar regra de negócio com acesso a banco — o mesmo motivo pelo qual qualquer linguagem separa "service layer" de "data layer".
+
+**Tratamento de erro (Rust)**: **`thiserror`** — um enum de erro próprio (`AppError::AssetNotFound`, `AppError::InvalidGuard`, etc.) que serializa pro React como JSON estruturado (`{ code, message }`), em vez de string solta. Decidido na Sessão 1 em vez de `anyhow` (mais genérico/dinâmico, bom pra prototipagem rápida, mas não dá pra distinguir tipos de erro na UI depois).
+
+**Busca de dados no React**: **TanStack Query** pra chamar os comandos Tauri (`invoke()`) — cuida de cache, loading, erro e refetch de forma consistente em toda tela, em vez de cada componente reinventar isso com `useState`/`useEffect`. Decidido na Sessão 1; mesma família do TanStack Table já escolhido pra grid (Fase 0.4).
+
+**Testes**: funções de `domain/` são puras (input → output, sem I/O) — dá pra testar sem precisar de banco nem de mock, então a prática é escrever teste unitário junto de cada função de cálculo conforme ela é escrita (não é uma decisão de infraestrutura, é só disciplina a manter).
+
+---
+
 ## Fases Detalhadas
 
 ### Fase 0 — Fundamentos & Decisões de Arquitetura
@@ -439,6 +458,8 @@ Diferente de ação (1x/ano), aqui é um **score contínuo**: cada indicador vir
 | Banco de dados local | SQLite vs DuckDB | **SQLite** ✓ — decidido na Sessão 1 junto com a decisão de stack híbrida (precisa ser lido/escrito tanto pelo Rust quanto pelo Python; SQLite é o padrão pra app local com escrita transacional simples de um arquivo só; DuckDB brilha em análise pesada sobre muita linha, não é o caso aqui) |
 | Onde roda a coleta de dados | Dentro do app (Rust) vs. processo separado em Python (herdado do desenho original, ver Fase 2) | **Processo separado em Python**, escrevendo no mesmo SQLite ✓ — decidido na Sessão 1. Motivo: evita reescrever em Rust o parsing de CVM/pandas e a extração de PDF, que já foram desenhados em Python e têm bibliotecas maduras lá (pandas, pdfplumber) — Rust ainda não tem equivalente tão bom |
 | Driver/ORM SQLite (Rust) | `rusqlite` (SQL cru) vs SeaORM (Active Record, assíncrono) vs Diesel (ORM maduro, macro-pesado) | **SeaORM** ✓ — decidido na Sessão 1 (revisado — a decisão original era `rusqlite`, mudou quando o usuário revelou que já tem hábito de ORM). Motivo: imita o modelo mental de Django/SQLAlchemy/ActiveRecord que o usuário já conhece, reduzindo a quantidade de Rust+SQL novo pra aprender de uma vez. Assíncrono, mas sem custo real já que o Tauri roda sobre `tokio` de qualquer forma |
+| Tratamento de erro (Rust) | `thiserror` (enum próprio, serializável) vs `anyhow` (genérico/dinâmico) | **`thiserror`** ✓ — decidido na Sessão 1. Erros viram JSON estruturado (`{code, message}`) pro React, em vez de string solta — importa pra "fácil manutenção" mesmo num projeto pessoal |
+| Busca de dados no React | TanStack Query vs `useState`/`useEffect` na mão | **TanStack Query** ✓ — decidido na Sessão 1. Mesma família do TanStack Table (Fase 0.4); evita repetir controle de loading/erro/cache em cada tela |
 | Caminho físico do arquivo SQLite (dev) | Dentro de `desktop/` vs `data-collector/` vs pasta `data/` própria | **`data-collector/practice_valuation.db`** ✓ — decidido na Sessão 1. Rust e Python já rodam no mesmo container, então só precisam apontar pro mesmo arquivo — sem API/rede entre eles. Caminho de produção (fora do Docker, pasta de dados do SO) fica pra Fase 6 |
 | Forma de guardar premissas/resultados de valuation | Uma tabela genérica com premissas em JSON vs uma tabela rígida por modelo | **Uma tabela por modelo** (7 tabelas) ✓ — decidido na Sessão 1, assim que o spec funcional chegou. Motivo: os campos de cada metodologia são conhecidos e estáveis, então colunas tipadas validam melhor as guardas de erro (`WACC−g`, `Ke vs g`, etc.) do que um blob JSON genérico |
 | Sync entre dispositivos/nuvem | Adiado — ver Roadmap | Não é MVP |
@@ -497,9 +518,10 @@ Diferente de ação (1x/ano), aqui é um **score contínuo**: cada indicador vir
 - **Continuação da Sessão 1 (revisão do driver Rust)**: usuário revelou que já tem hábito de pensar em ORM (não é o mesmo que "iniciante em Rust/banco do zero") — isso mudou a escolha de `rusqlite` pra **SeaORM** (estilo Active Record, familiar pra quem vem de Django/SQLAlchemy/ActiveRecord). Diesel foi descartado por ter sintaxe de query mais macro-pesada. Pedido explícito do usuário: **ir com calma explicando o código Rust**, já que ele não tem muita intimidade com a linguagem — reforça a "Diretriz de ensino" do topo deste arquivo, agora com ênfase específica em Rust (não só em decisões de arquitetura)
 - **Continuação da Sessão 1 (chegada do spec funcional — desbloqueia Fase 1 e Fase 3)**: usuário trouxe um documento com os 7 modelos de valuation de ação (DCF/FCFF, Gordon/DDM, Bazin, Graham, Bancos, RNAV, Preço Teto Projetivo — cada um com inputs, fórmula e guarda de erro) e o score cripto de 9 indicadores (verde/vermelho, automatizáveis vs fallback manual pago). Isso mudou a decisão anterior sobre o schema: em vez de `assumption_set` genérico em JSON, decidido **uma tabela por modelo** (7 tabelas) — os campos agora são conhecidos e estáveis, então colunas tipadas validam melhor as guardas de erro que um JSON genérico
 - **Continuação da Sessão 1 (consolidação em arquivo único)**: usuário pediu pra juntar tudo num arquivo só, bem organizado por seções, em vez de espalhar entre `PROJECT_STATE.md` + 2 arquivos em `docs/`. As duas specs (`spec_automacao_dados.md` e `spec_funcional_valuation_e_cripto.md`) foram incorporadas na íntegra dentro das Fases 2 e 3 (estrutura de módulos, mecânica da CVM, as 7 fórmulas completas, a tabela cheia do score cripto) e os arquivos removidos do repositório — o histórico deles continua acessível via `git log`/`git show` se precisar. A pasta `docs/` deixou de existir
+- **Continuação da Sessão 1 (arquitetura de código)**: usuário pediu decisões de arquitetura parecidas com a do SeaORM, pensando em manutenção de longo prazo mesmo sendo projeto pessoal. Criada a seção "Arquitetura de Código": camadas no Rust (`commands/` → `domain/` → repository SeaORM), tratamento de erro com **`thiserror`** (erro estruturado, serializável pro React) em vez de `anyhow`, e **TanStack Query** no React pra chamar os comandos Tauri (mesma família do TanStack Table já escolhido)
 
 **Pendências pra próxima sessão** (em ordem):
-1. Fatia vertical: implementar só o modelo **Bazin** ponta a ponta primeiro (tabela + entity SeaORM + função de cálculo), antes de replicar pros outros 6 — adicionar SeaORM (+ `sea-orm-cli`) ao `Cargo.toml`
+1. Fatia vertical: implementar só o modelo **Bazin** ponta a ponta primeiro (tabela + entity SeaORM + `domain/` com a função de cálculo + `commands/` fino + erro via `thiserror` + tela simples usando TanStack Query), antes de replicar pros outros 6 — adicionar SeaORM (+ `sea-orm-cli`) e `thiserror` ao `Cargo.toml`, e `@tanstack/react-query` ao `package.json`
 2. Depois da fatia vertical validada, replicar o padrão pros outros 6 modelos + `cripto_indicadores` (Fase 3.2)
 3. README.md e LICENSE na raiz do repo ainda não existem (Fase 0.5/6.2/6.3)
 4. Quando o usuário voltar a mexer no TruthID mobile, lembrar que o cache Docker foi limpo (Sessão 1 do Practice Valuation) — primeiro `docker compose up` de lá vai ser mais lento
