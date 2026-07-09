@@ -2,7 +2,7 @@
 
 > Este arquivo é o centro de controle do projeto. Atualizado a cada sessão de trabalho.
 > Pode ser lido por qualquer instância do Claude Code em qualquer máquina para retomar o contexto.
-> Última atualização: 2026-07-08 (Sessão 1, continuação — spec funcional de valuation e score cripto entregue: `docs/spec_funcional_valuation_e_cripto.md`, desbloqueia Fase 1 e Fase 3)
+> Última atualização: 2026-07-08 (Sessão 1, continuação — arquivo consolidado: as duas specs de `docs/` foram incorporadas nas Fases 2 e 3, e removidas. Este é o único arquivo de planejamento do projeto agora)
 
 ---
 
@@ -20,7 +20,7 @@
 
 O projeto vai para um repositório **público**. Cuidados a partir do primeiro commit:
 - **Nunca commitar chaves de API, tokens ou credenciais.** Tudo isso vai em `.env` (ou keyring do SO), com `.env.example` no repo mostrando as variáveis esperadas sem valores reais.
-- `.gitignore` deve cobrir `.env`, banco de dados local (`*.db`, `*.sqlite`), pastas de build/dist, e qualquer arquivo de credencial (`.credentials/`, `service_account.json`, etc. — herdado do spec antigo, ver `docs/spec_automacao_dados.md`).
+- `.gitignore` deve cobrir `.env`, banco de dados local (`*.db`, `*.sqlite`), pastas de build/dist, e qualquer arquivo de credencial.
 - **Nunca hardcodar dados pessoais de portfólio** (valores investidos, quantidades, saldo) em código de exemplo, testes ou fixtures — usar dados fictícios.
 - Antes de cada `git push` para o remoto público, revisar `git status`/`git diff` procurando por segredos, mesmo em arquivos com nome inofensivo.
 - Ao decidir o banco de dados local (Fase 1), garantir que o arquivo do banco fique fora do controle de versão por padrão.
@@ -29,7 +29,7 @@ O projeto vai para um repositório **público**. Cuidados a partir do primeiro c
 
 ## Diretriz de ensino (IMPORTANTE — ler antes de cada sessão)
 
-O usuário não é iniciante em programação (ver `docs/spec_automacao_dados.md` — já desenhou sozinho uma arquitetura de coleta de dados via APIs, com bom domínio de Python). O ponto de partida é **iniciante em construir uma aplicação desktop completa**: escolha de framework de UI, empacotamento/distribuição, banco de dados local, e organização de um projeto maior que um script.
+O usuário não é iniciante em programação (ver Fase 2 abaixo — já desenhou sozinho uma arquitetura de coleta de dados via APIs, com bom domínio de Python). O ponto de partida é **iniciante em construir uma aplicação desktop completa**: escolha de framework de UI, empacotamento/distribuição, banco de dados local, e organização de um projeto maior que um script.
 
 **Regras para o Claude:**
 - Ir com calma — construir aos poucos, sessão a sessão, sem pressa pra "terminar tudo de uma vez"
@@ -53,7 +53,7 @@ O usuário não é iniciante em programação (ver `docs/spec_automacao_dados.md
 ## O que é o Practice Valuation
 
 App desktop pessoal para acompanhar teses de investimento em ações (B3) e criptoativos.
-Substitui a ideia original de planilha (ver `docs/spec_automacao_dados.md`, histórico) por um app com banco de dados local.
+Substitui a ideia original de planilha (ver Fase 2, histórico) por um app com banco de dados local.
 
 **O que ele precisa fazer (visão do usuário, ainda sendo refinada):**
 - Puxar o máximo de dados possível de fontes externas (fundamentos de ações BR, dados on-chain/mercado de cripto), com espaço pra ajuste manual quando necessário
@@ -63,13 +63,13 @@ Substitui a ideia original de planilha (ver `docs/spec_automacao_dados.md`, hist
 - Banco de dados **local** por enquanto — sync entre máquinas/nuvem é ideia pra mais adiante (ver Roadmap)
 
 **Decidido até agora** (ver "Decisões de Arquitetura em Aberto"):
-- Stack híbrida: app em **Tauri + Rust + React/TypeScript** (reaproveitando o padrão do TruthID), coleta de dados em **Python** (reaproveitando o desenho do `docs/spec_automacao_dados.md`), os dois se comunicando só através de um banco **SQLite** local compartilhado — sem API/IPC entre eles
+- Stack híbrida: app em **Tauri + Rust + React/TypeScript** (reaproveitando o padrão do TruthID), coleta de dados em **Python** (ver Fase 2), os dois se comunicando só através de um banco **SQLite** local compartilhado — sem API/IPC entre eles
 
 - UI: **Tailwind CSS + shadcn/ui (Radix) + TanStack Table**, visual **arejado tipo dashboard** (não denso tipo planilha, apesar da ideia original de "funcionar como planilha" — isso ficou pro comportamento/dado, não pra densidade visual)
 
 **Ainda não decidido**:
 - Biblioteca de gráfico (pra tela de cripto/indicadores, Fase 4.3) — avaliar quando chegar lá (candidatos: Recharts, ou lightweight-charts da TradingView, mais voltada pra preço/candlestick)
-- ~~Lista exata de metodologias de preço-teto~~ — entregue na Sessão 1, ver `docs/spec_funcional_valuation_e_cripto.md` e a Fase 3
+- ~~Lista exata de metodologias de preço-teto~~ — entregue na Sessão 1, ver Fase 3
 
 ---
 
@@ -116,7 +116,6 @@ Criado na Fase 0.5: `desktop/Dockerfile`, `desktop/docker-compose.yml`, `desktop
   - `desktop/` — projeto Tauri + React + TS, gerado via `create-tauri-app` e renomeado (`practice-valuation`). Tailwind v4 já plugado (`@tailwindcss/vite`, `src/index.css`) — shadcn/ui e TanStack Table entram quando a Fase 4 começar a construir telas de verdade
   - `desktop/Dockerfile` + `docker-compose.yml` + `dev.sh` — ambiente de dev (ver "Ambiente de Desenvolvimento")
   - `data-collector/` — pasta reservada pro coletor Python (Fase 2), com só um `README.md` e `requirements.txt` vazio por enquanto — implementação real ainda não começou
-  - `docs/spec_automacao_dados.md` — mantido como referência de fontes de dados
   - Ainda falta: README.md na raiz do repo, LICENSE
 - [ ] 0.6 — Checklist de segurança aplicado desde o primeiro commit (ver "Diretriz de segurança" acima)
 
@@ -126,7 +125,7 @@ Criado na Fase 0.5: `desktop/Dockerfile`, `desktop/docker-compose.yml`, `desktop
 
 **Objetivo**: desenhar o schema do banco local que sustenta tudo — ativos, premissas, cálculos salvos, indicadores e alertas.
 
-**Fonte da verdade pro schema**: `docs/spec_funcional_valuation_e_cripto.md` (entregue na Sessão 1) — descreve, modelo por modelo, os inputs, a fórmula e as guardas de erro de cada metodologia. Ver resumo na Fase 3.
+**Fonte da verdade pro schema**: as fórmulas completas de cada metodologia estão na Fase 3 (inputs, cálculo e guarda de erro, modelo por modelo).
 
 **Entidades decididas** (revisado depois da spec chegar — ver nota sobre a mudança de abordagem abaixo):
 - `asset` — ativo acompanhado (ação BR ou cripto), com tipo, ticker/símbolo, nome
@@ -152,61 +151,245 @@ Criado na Fase 0.5: `desktop/Dockerfile`, `desktop/docker-compose.yml`, `desktop
 
 **Objetivo**: puxar o máximo de dado possível de fontes externas, com fallback manual quando a fonte automática não cobre.
 
-O levantamento de fontes já foi feito antes deste projeto virar app desktop — ver `docs/spec_automacao_dados.md` (mantido como referência histórica: o desenho de fontes/APIs continua válido, só o destino dos dados mudou de "Google Sheets" para "banco de dados local do app").
+**Histórico**: o levantamento abaixo foi desenhado pelo usuário antes deste projeto virar app desktop, pensando em escrever direto numa planilha do Google Sheets (via Service Account + `gspread`). Essa rota foi abandonada na Sessão 1 — o desenho de fontes/APIs e o pipeline de dados continuam válidos, só o destino final mudou de "planilha" pra "banco de dados local do app" (o módulo `sheets/writer.py` e a autenticação via Service Account descritos na ideia original não se aplicam mais).
 
 **Fontes já mapeadas**:
 | Categoria | Dado | Fonte primária | Fallback |
 |---|---|---|---|
-| Ações BR | Fundamentos (P/L, P/VP, ROE, ROIC, margens, EV/EBITDA) | bolsai | brapi |
+| Ações BR | Fundamentos (P/L, P/VP, ROE, ROIC, margens, EV/EBITDA — 27 indicadores TTM) | bolsai (200 req/dia grátis) | brapi (`modules=defaultKeyStatistics`, 15.000 req/dia grátis) |
 | Ações BR | Cotação atual | brapi | bolsai |
-| Ações BR | Balanço/DRE/DFC histórico | bolsai / CVM Dados Abertos (DFP/ITR) | brapi |
+| Ações BR | Balanço/DRE/DFC histórico (contas CVM brutas) | bolsai / CVM Dados Abertos (DFP/ITR) | brapi (`balanceSheetHistory`) |
 | Ações BR | Dividendos históricos | bolsai / brapi | — |
 | Cripto | Preço, market cap, volume | CoinGecko | — |
 | Cripto | TVL (DeFi) | DefiLlama | — |
-| Cripto | Emissão líquida (ETH) | ultrasound.money | — |
-| Cripto | Endereços ativos/transações | Etherscan | — |
-| Cripto | Exchange netflow, MVRV, Puell | CryptoQuant/Glassnode (pago) | manual, link pro dashboard |
-| Cripto | Staking Yield líquido | stakingrewards.com (free tier) | manual |
-| PDF/release não estruturado | Campos qualitativos (landbank, comentários) | pdfplumber + API Claude (schema fixo) | preenchimento manual |
+| Cripto | Emissão líquida (issuance − burn, ETH) | ultrasound.money | — |
+| Cripto | Endereços ativos/transações diárias | Etherscan (rate limit baixo) | — |
+| Cripto | Exchange netflow, MVRV Z-Score, Puell Multiple | CryptoQuant/Glassnode (pago, sem alternativa gratuita boa) | manual, link pro dashboard |
+| Cripto | Staking Yield líquido | stakingrewards.com (free tier limitado) | manual |
+| PDF/release não estruturado | Campos qualitativos (landbank, comentários) | pdfplumber/PyMuPDF + API Claude (schema fixo) | preenchimento manual |
+
+Cobre bem os indicadores de **triagem** (P/L, P/VP, ROE, DY, EV/EBITDA, CAGR receita) e 6 dos 8 indicadores de cripto de graça. Pros inputs finos do DCF completo (Capex de expansão vs manutenção, ΔNWC detalhado) o script deixa pré-preenchido com o dado bruto da CVM, mas ainda vale conferir contra o release nos casos historicamente problemáticos (banco, incorporadora).
+
+**Estrutura de módulos planejada** (pasta `data-collector/`, ver Fase 0.5):
+```
+data-collector/
+├── main.py                    # orquestrador — roda tudo ou um módulo específico
+├── config.yaml                # lista de tickers/moedas a acompanhar, chaves de API
+├── requirements.txt
+└── sources/
+    ├── acoes_bolsai.py         # cliente da API bolsai (fundamentos B3)
+    ├── acoes_brapi.py          # cliente da API brapi (cotação + fallback)
+    ├── cvm_dfp.py              # baixa o zip trimestral da CVM, mapeia conta → campo do modelo
+    ├── pdf_extractor.py        # pdfplumber/PyMuPDF + chamada à API Claude com schema fixo
+    ├── cripto_coingecko.py     # preço, market cap, volume
+    ├── cripto_defillama.py     # TVL
+    ├── cripto_ultrasound.py    # emissão líquida ETH (issuance − burn)
+    ├── cripto_etherscan.py     # endereços ativos / transações
+    └── cripto_stakingrewards.py # staking yield líquido
+```
+Chaves de API ficam em `.env`/`config.yaml` fora do controle de versão (ver "Diretriz de segurança").
+
+**CVM Dados Abertos — como funciona na prática** (fonte principal pro DCF/RNAV/Bancos): não é uma API tipo REST (não dá pra chamar `/empresa/FIQE3`). É um **arquivo zip por ano**, com o balanço de todas as ~500 empresas abertas dentro:
+```
+https://dados.cvm.gov.br/dados/CIA_ABERTA/DOC/DFP/DADOS/dfp_cia_aberta_2025.zip
+```
+Dentro do zip, vários CSVs (um por demonstração: Balanço Ativo `BPA`, Balanço Passivo `BPP`, Resultado `DRE`, Fluxo de Caixa `DFC_MI` — sempre com versão `_con` = consolidado e `_ind` = individual). Cada linha: `CNPJ_CIA | DENOM_CIA | CD_CVM | DT_REFER | CD_CONTA | DS_CONTA | VL_CONTA`. `CD_CONTA` é o código fixo da conta (ex: `3.11` = Lucro Líquido, `2.03` = Patrimônio Líquido, `2.01.04` = Estoques — igual pra qualquer empresa aberta) e `VL_CONTA` o valor daquele período. É o mesmo dataset que bolsai/brapi consultam por trás — baixando direto, dá pra montar o próprio mapeamento conta → campo do DCF (Receita, EBIT, D&A, Capex, Dívida) sem depender de a API "empacotar" exatamente o campo necessário, e não quebra quando o layout de um PDF muda.
+
+Fluxo do `cvm_dfp.py`:
+1. `baixar_zip_ano(ano)` — baixa o zip do ano uma vez (todas as empresas vêm juntas)
+2. Abre os CSVs com pandas, filtra pelas linhas da(s) empresa(s) de interesse (por `CNPJ_CIA` ou `DENOM_CIA`)
+3. `ticker_para_cnpj(ticker)` — a CVM identifica empresa por CNPJ, não por ticker; resolve com uma chamada rápida à API bolsai/brapi só pra traduzir
+4. `extrair_contas(cnpj, lista_codigos_conta)` — pivota só os `CD_CONTA` que interessam pro modelo (mapeamento fixo)
+
+Pra maioria das empresas "normais" (o grosso da lista), esse caminho sozinho já cobre praticamente tudo — Capex, D&A, ΔNWC, dívida, tudo vem de contas padronizadas do DFP.
+
+**Extração via PDF (fallback, só quando o dado não é estruturado)**: coisas como composição de landbank de uma incorporadora, ou comentário qualitativo do release, não vêm no DFP — só no PDF/apresentação. Pra esses casos: `pdfplumber`/`PyMuPDF` extrai texto e tabelas → vai pra API da Anthropic (Claude) com um prompt fixo pedindo só JSON com os campos que faltam (a mesma coisa que fazer manualmente mandando o PDF no chat, só que como script) → o script valida o JSON e grava no banco junto com a fonte ("Source: Release 4T25, pág. X") pra conferência rápida.
 
 **Etapas**:
-- [x] 2.1 — Decidir onde/como a coleta roda → **processo Python separado**, disparado **manualmente por um botão na UI** ("Run"/"Atualizar dados"), sem cron/scheduler. Decidido na Sessão 1. Mecanismo:
+- [x] 2.1 — Decidir onde/como a coleta roda → **processo Python separado**, disparado **manualmente por um botão na UI** ("Run"/"Atualizar dados"), sem cron/scheduler (a ideia original de cron — 1x/ano ações, 1x/dia cripto — foi descartada, ver Sessão 1). Mecanismo:
   - Frontend: botão chama `invoke()` de um comando Tauri
   - Backend (Rust): comando assíncrono dispara o script Python como subprocesso (não trava a UI), espera terminar
   - Python: puxa os dados das fontes e grava direto no SQLite compartilhado
   - Frontend: enquanto roda, mostra spinner; ao terminar, mostra um resumo (quantos ativos, sucesso/erro) — sem log ao vivo linha a linha por enquanto (pode vir depois se sentir falta)
   - **Guarda contra clique duplo/spam**: desabilitar o botão no frontend enquanto roda **e** ter uma trava no lado Rust (ex: `Mutex`/flag no estado do app) que recusa uma segunda chamada concorrente mesmo se disparada rápido demais — evita dois processos Python escrevendo no mesmo SQLite ao mesmo tempo e evita estourar rate limit das APIs gratuitas
   - A Fase 5 (alertas) pode um dia precisar de checagem periódica dos indicadores **já salvos** — isso é diferente de "puxar dado novo" e fica pra quando chegarmos lá
-- [ ] 2.2 — Implementar clientes de fonte de dados de ações (bolsai, brapi, CVM)
-- [ ] 2.3 — Implementar clientes de fonte de dados de cripto (CoinGecko, DefiLlama, ultrasound.money, Etherscan)
-- [ ] 2.4 — Fallback de extração via PDF (pdfplumber + Claude), quando necessário
+- [ ] 2.2 — Implementar clientes de fonte de dados de ações (`acoes_bolsai.py`, `acoes_brapi.py`, `cvm_dfp.py`)
+- [ ] 2.3 — Implementar clientes de fonte de dados de cripto (`cripto_coingecko.py`, `cripto_defillama.py`, `cripto_ultrasound.py`, `cripto_etherscan.py`, `cripto_stakingrewards.py`)
+- [ ] 2.4 — Fallback de extração via PDF (`pdf_extractor.py` — pdfplumber + Claude), quando necessário
 
 ---
 
 ### Fase 3 — Motor de Cálculo (Preço-Teto/Valuation)
 
-**Objetivo**: calcular e salvar preços-teto/valuation com premissas customizáveis, permitindo múltiplos cálculos por ativo.
+**Objetivo**: calcular e salvar preços-teto/valuation com premissas customizáveis, permitindo múltiplos cálculos por ativo. Metodologias entregues pelo usuário na Sessão 1 — esta seção é a fonte da verdade completa (não precisa consultar outro arquivo).
 
-**Fonte**: `docs/spec_funcional_valuation_e_cripto.md` (entregue na Sessão 1) — tem a fórmula e a guarda de erro de cada modelo, resumidas abaixo.
+#### Regra geral (vale pra todos os modelos de ação)
 
-**7 modelos de ação**:
-| Modelo | Quando usar | Guarda de erro |
-|---|---|---|
-| DCF/FCFF | Empresas "normais" (varejo, indústria, tech, utilities) — não banco/incorporadora | Não calcula se `WACC − g <= 0` |
-| Gordon/DDM | Boa pagadora de dividendo, crescimento previsível | Inválido se `Ke <= g` |
-| Bazin | "Vaca leiteira" (bancão, elétrica, saneamento), foco em yield | — |
-| Graham Number | Filtro rápido, qualquer empresa com lucro/PL positivos | Não calcula se LPA ≤ 0 ou VPA ≤ 0 |
-| Bancos (P/B via ROE-Gordon) | Bancos/instituições financeiras (dívida é matéria-prima, não alavancagem) | Precisa `Ke > g_sustentável` |
-| Incorporadoras (RNAV) | Construtoras — "estoque" é imóvel, não dá pra projetar FCFF trimestre a trimestre | — |
-| Preço Teto Projetivo | Mesma lógica do Bazin, mas projetando N anos e trazendo a valor presente | — |
+Todo modelo carrega 3 campos fixos além dos específicos — **ticker** (texto, ex: `FIQE3`), **ano de referência** (`ano_ref`, ano-base dos dados usados) e **preço atual** (R$, de API com fallback manual) — e termina com a mesma "cauda final":
+```
+margem_seguranca = (preco_justo − preco_atual) / preco_justo
+veredito         = "BARATO" se margem_seguranca > 0, senão "CARO"
+```
+O app também calcula `anos_desatualizado = ano_atual − ano_ref` e sinaliza: `<=0` em dia, `==1` atenção, `>=2` desatualizado — é o campo que avisa quando revisar aquela empresa.
 
-**Score de cripto (Ethereum, contínuo)**: 9 indicadores, cada um vira verde/vermelho, score = `verdes / 9`. 7-9 verdes = tese intacta, 4-6 = neutro/observar, 0-3 = considerar reduzir. Automatizáveis: Emissão Líquida (ultrasound.money), Staking Yield (stakingrewards.com), TVL DeFi (DefiLlama), Endereços Ativos (Etherscan), Fees vs Emissão (ultrasound.money/Etherscan), NVT (parcial, calculável). Só fallback manual (fonte paga): MVRV Z-Score, Puell Multiple, Exchange Netflow (Glassnode/CryptoQuant).
+#### 1. DCF / FCFF (empresas "normais")
 
-**⚠️ Importante (do próprio spec)**: os thresholds de sinal (ex: "MVRV < 0 = verde", "Puell > 4 = vermelho") são ponto de partida, **não hardcoded** — o app precisa deixar esses números configuráveis, porque o usuário vai querer calibrar depois de ver os indicadores rodando na prática.
+**Quando usar**: empresa com capital de giro e capex previsíveis (varejo, indústria, tech, utilities). Não usar em banco ou incorporadora.
+
+| Input | Unidade |
+|---|---|
+| Receita Líquida | R$ milhões |
+| EBIT | R$ milhões |
+| Alíquota Efetiva de IR | % |
+| D&A (Depreciação/Amortização) | R$ milhões |
+| Capex | R$ milhões |
+| ΔNWC (variação capital de giro) | R$ milhões |
+| Dívida Total | R$ milhões |
+| Caixa | R$ milhões |
+| Nº de Ações | milhões |
+| Beta | número |
+| Rf (taxa livre de risco) | % |
+| Prêmio de Risco de Mercado | % |
+| Kd (custo da dívida) | % |
+| g (crescimento na perpetuidade) | % |
+
+```
+FCFF         = EBIT × (1 − IR) + D&A − Capex − ΔNWC
+Ke (CAPM)    = Rf + Beta × Prêmio_Risco_Mercado
+E (equity)   = Preço_Atual × Nº_Ações
+WACC         = [E / (E + Dívida)] × Ke + [Dívida / (E + Dívida)] × Kd × (1 − IR)
+Valor_Firma  = FCFF × (1 + g) / (WACC − g)
+Valor_Equity = Valor_Firma − Dívida_Total + Caixa
+Preco_Justo  = Valor_Equity / Nº_Ações
+```
+**Guarda**: se `WACC − g <= 0`, não calcular (modelo quebra matematicamente) — mostrar aviso em vez de número.
+
+#### 2. Gordon / DDM (Dividend Discount Model)
+
+**Quando usar**: boa pagadora de dividendo, crescimento previsível.
+
+| Input | Unidade |
+|---|---|
+| Dividendo Atual (D0) | R$/ação |
+| Crescimento Esperado dos Dividendos (g) | % |
+| Ke (retorno exigido) | % |
+
+```
+D1          = D0 × (1 + g)
+Preco_Justo = D1 / (Ke − g)
+```
+**Guarda**: `Ke > g`, senão inválido.
+
+#### 3. Bazin
+
+**Quando usar**: "vaca leiteira" (bancão, elétrica, saneamento), foco em yield de dividendo.
+
+| Input | Unidade |
+|---|---|
+| Dividendo Médio por Ação (últimos 5 anos) | R$/ação |
+| Yield Desejado | % (default sugerido: 6%) |
+
+```
+Preco_Teto = Dividendo_Médio / Yield_Desejado
+```
+
+#### 4. Graham (Graham Number)
+
+**Quando usar**: filtro rápido de margem de segurança, qualquer empresa com lucro e patrimônio positivos.
+
+| Input | Unidade |
+|---|---|
+| LPA (Lucro por Ação) | R$/ação |
+| VPA (Valor Patrimonial por Ação) | R$/ação |
+
+```
+Graham_Number = RAIZ(22.5 × LPA × VPA)
+```
+**Guarda**: se LPA ≤ 0 ou VPA ≤ 0, não calcular (empresa com prejuízo ou PL negativo não se encaixa nesse método).
+
+#### 5. Bancos (P/B via ROE-Gordon)
+
+**Quando usar**: bancos e instituições financeiras — FCFF não serve porque dívida é matéria-prima do negócio, não uma alavancagem a evitar.
+
+| Input | Unidade |
+|---|---|
+| VPA (Valor Patrimonial por Ação) | R$/ação |
+| ROE | % |
+| Payout | % |
+| Ke (retorno exigido) | % |
+
+```
+g_sustentável = ROE × (1 − Payout)
+P/B_Justo     = (ROE − g_sustentável) / (Ke − g_sustentável)
+Preco_Justo   = P/B_Justo × VPA
+```
+**Guarda**: `Ke > g_sustentável`.
+
+#### 6. Incorporadoras (RNAV)
+
+**Quando usar**: construtoras/incorporadoras — o "estoque" é imóvel, não dá pra projetar FCFF de forma suave trimestre a trimestre.
+
+| Input | Unidade |
+|---|---|
+| Landbank a Valor de Mercado | R$ milhões |
+| Estoque a Valor de Mercado | R$ milhões |
+| Caixa Líquido (caixa − dívida, pode ser negativo) | R$ milhões |
+| Nº de Ações | milhões |
+
+```
+RNAV_Total = Landbank + Estoque + Caixa_Líquido
+RNAV/Ação  = RNAV_Total / Nº_Ações
+```
+(`RNAV/Ação` entra no lugar de `preco_justo` na regra geral.)
+
+#### 7. Preço Teto Projetivo
+
+**Quando usar**: mesma lógica do Bazin, mas trazendo N anos de crescimento esperado pra frente e descontando a valor presente — útil quando se quer o teto "olhando pra frente", não só o dividendo de hoje.
+
+| Input | Unidade |
+|---|---|
+| Dividendo Atual (D0) | R$/ação |
+| Crescimento Esperado (g) | % |
+| Anos de Projeção (N) | inteiro (default sugerido: 5) |
+| Yield Desejado (alvo, estilo Bazin) | % (default sugerido: 6%) |
+| Ke (taxa de desconto) | % |
+
+```
+Dividendo_Projetado_N = D0 × (1 + g)^N
+Preco_Teto_Futuro_N   = Dividendo_Projetado_N / Yield_Desejado
+Preco_Teto_Projetivo  = Preco_Teto_Futuro_N / (1 + Ke)^N
+```
+(`Preco_Teto_Projetivo` entra como `preco_justo` na regra geral.)
+
+#### Persistência (ver Fase 1)
+
+Uma tabela por modelo, padrão comum: `ticker`, `ano_ref`, `preco_atual`, campos específicos do modelo, `preco_justo` (calculado, cacheado), `margem_seguranca`, `veredito`, `data_ultima_atualizacao`. Permite mostrar histórico ("como essa margem evoluiu ano a ano") sem recalcular tudo toda vez, e salvar quantos cálculos o usuário quiser por ativo (premissas diferentes = linhas diferentes, nada sobrescreve).
+
+#### Score de Cripto (Ethereum) — score contínuo
+
+Diferente de ação (1x/ano), aqui é um **score contínuo**: cada indicador vira verde (bom pra compra/manter) ou vermelho (sinal de reduzir risco), e o app soma quantos estão verdes de um total de 9 — contagem objetiva, não "vibe".
+
+| # | Indicador | O que mede | Fonte | Automatizável? | Regra de sinal (ponto de partida — ajustável) |
+|---|---|---|---|---|---|
+| 1 | MVRV Z-Score | Preço vs custo-base médio da rede | Glassnode (pago) | Não (fallback manual) | Verde se < 0 · Vermelho se > 7 |
+| 2 | NVT Ratio | "P/L" da rede (valor de mercado / volume transacionado) | Calculável com dado on-chain | Parcial | Verde se abaixo da média móvel de 90d · Vermelho se muito acima |
+| 3 | Puell Multiple | Emissão diária (USD) vs média histórica | Glassnode (pago) | Não (fallback manual) | Verde se < 0.5 · Vermelho se > 4 |
+| 4 | Emissão Líquida (issuance − burn) | ETH é deflacionário ou não no período | ultrasound.money | Sim | Verde se negativa (deflacionário) · Vermelho se fortemente positiva |
+| 5 | Staking Yield Líquido | Retorno real do staking, descontada a diluição | stakingrewards.com | Sim (free tier) | Verde se yield real > 2% · Vermelho se perto de 0 ou negativo |
+| 6 | TVL DeFi (Ethereum) | Uso real da rede em DeFi | DefiLlama | Sim | Verde se em tendência de alta (MoM) · Vermelho se queda consistente |
+| 7 | Endereços Ativos / Transações Diárias | Adoção/atividade da rede | Etherscan | Sim | Verde se crescendo (MoM/YoY) · Vermelho se caindo |
+| 8 | Exchange Netflow | Saída (acumulação) ou entrada (venda) líquida das corretoras | CryptoQuant/Glassnode (pago) | Não (fallback manual) | Verde se saída líquida (negativo) · Vermelho se entrada líquida forte |
+| 9 | Fees de Rede vs Emissão | "Receita líquida" real do protocolo pós EIP-1559 | ultrasound.money / Etherscan | Sim | Verde se fees líquidas cobrindo bem a emissão · Vermelho se dependente de emissão alta |
+
+**Score final** = verdes / 9. Leitura sugerida (ajustável depois de ver rodando um tempo): **7-9 verdes** → tese intacta, manter/aportar · **4-6 verdes** → neutro, observar de perto · **0-3 verdes** → considerar reduzir risco/posição.
+
+**Persistência**: tabela `cripto_indicadores` com `moeda`, `data`, `indicador`, `valor_bruto`, `sinal` (verde/vermelho), `fonte` — dá histórico de série temporal, dá pra plotar a evolução do score ao longo do tempo, não só o snapshot do dia.
+
+**⚠️ Importante**: os thresholds acima (`< 0`, `> 7`, `> 2%`, etc.) são ponto de partida razoável baseado em uso histórico de mercado, **não são regra imutável** — o app precisa deixar esses números configuráveis (não hardcoded), porque o usuário provavelmente vai querer calibrar depois de ver como cada indicador se comporta na prática.
 
 **Etapas**:
-- [x] 3.1 — Lista de metodologias entregue (Sessão 1) — ver tabela acima e `docs/spec_funcional_valuation_e_cripto.md`
-- [ ] 3.2 — Modelar cada metodologia como função pura Rust: inputs (tabela específica do modelo) → resultado (`preco_justo`, `margem_seguranca`, `veredito`), aplicando as guardas de erro
+- [x] 3.1 — Lista de metodologias entregue (Sessão 1) — ver esta seção completa
+- [ ] 3.2 — Modelar cada metodologia (dos 7 modelos acima) como função pura Rust: inputs (tabela específica do modelo) → resultado (`preco_justo`, `margem_seguranca`, `veredito`), aplicando as guardas de erro
 - [ ] 3.3 — Motor do score cripto: calcular sinal (verde/vermelho) por indicador com threshold configurável, gravar em `cripto_indicadores`, somar o score
 - [ ] 3.4 — Permitir salvar quantos cálculos o usuário quiser por ativo (já é a natureza do schema — cada linha é um cálculo, nada sobrescreve), todos comparáveis lado a lado na UI
 
@@ -253,7 +436,7 @@ O levantamento de fontes já foi feito antes deste projeto virar app desktop —
 | Nome do projeto | — | **Practice Valuation** (`practice-valuation`) ✓ — decidido na Sessão 1 |
 | Framework do app desktop | Python (PySide6/Qt, Flet, etc.) vs Tauri (Rust+React/TS) vs Electron vs Flutter Desktop | **Tauri + Rust + React/TypeScript** ✓ — decidido na Sessão 1. Motivo: reaproveita o padrão já validado no TruthID (keyring do SO, empacotamento multi-plataforma via GitHub Actions), e React/TS tem ecossistema forte pra UI densa em dados (tabelas, gráficos) |
 | Banco de dados local | SQLite vs DuckDB | **SQLite** ✓ — decidido na Sessão 1 junto com a decisão de stack híbrida (precisa ser lido/escrito tanto pelo Rust quanto pelo Python, e SQLite tem driver maduro nos dois: `sqlx`/`rusqlite` e `sqlite3`) |
-| Onde roda a coleta de dados | Dentro do app (Rust) vs. processo separado em Python (herdado do desenho em `docs/spec_automacao_dados.md`) | **Processo separado em Python**, escrevendo no mesmo SQLite ✓ — decidido na Sessão 1. Motivo: evita reescrever em Rust o parsing de CVM/pandas e a extração de PDF, que já foram desenhados em Python e têm bibliotecas maduras lá (pandas, pdfplumber) — Rust ainda não tem equivalente tão bom |
+| Onde roda a coleta de dados | Dentro do app (Rust) vs. processo separado em Python (herdado do desenho original, ver Fase 2) | **Processo separado em Python**, escrevendo no mesmo SQLite ✓ — decidido na Sessão 1. Motivo: evita reescrever em Rust o parsing de CVM/pandas e a extração de PDF, que já foram desenhados em Python e têm bibliotecas maduras lá (pandas, pdfplumber) — Rust ainda não tem equivalente tão bom |
 | Driver SQLite (Rust) | `rusqlite` (síncrono) vs `sqlx` (assíncrono, checagem em compile-time) | **`rusqlite`** ✓ — decidido na Sessão 1. App desktop de usuário único, sem concorrência real de servidor — `sqlx` traria mais setup sem ganho claro aqui |
 | Caminho físico do arquivo SQLite (dev) | Dentro de `desktop/` vs `data-collector/` vs pasta `data/` própria | **`data-collector/practice_valuation.db`** ✓ — decidido na Sessão 1. Rust e Python já rodam no mesmo container, então só precisam apontar pro mesmo arquivo — sem API/rede entre eles. Caminho de produção (fora do Docker, pasta de dados do SO) fica pra Fase 6 |
 | Forma de guardar premissas/resultados de valuation | Uma tabela genérica com premissas em JSON vs uma tabela rígida por modelo | **Uma tabela por modelo** (7 tabelas) ✓ — decidido na Sessão 1, assim que o spec funcional chegou. Motivo: os campos de cada metodologia são conhecidos e estáveis, então colunas tipadas validam melhor as guardas de erro (`WACC−g`, `Ke vs g`, etc.) do que um blob JSON genérico |
@@ -310,7 +493,8 @@ O levantamento de fontes já foi feito antes deste projeto virar app desktop —
   - **Resultado final: o app abre de verdade.** `docker compose up` (ou `./desktop/dev.sh`) sobe o container, `npm install` + `cargo build` rodam dentro dele, e a janela do Tauri aparece na tela do usuário via X11 — confirmado visualmente pelo usuário. Smoke test da Fase 0.5/4 considerado **concluído**
   - **Testado pelo usuário**: botão "Greet" da janela funciona — comunicação React↔Rust via `invoke()` confirmada na prática
 - **Continuação da Sessão 1 (Fase 1 — início da conversa sobre o SQLite)**: explicado como Rust e Python vão acessar o mesmo banco (mesmo container, mesmo arquivo, sem API entre eles). Decidido: driver **`rusqlite`** no Rust (não `sqlx` — sem necessidade de async/compile-time check pra um app de usuário único), modo **WAL** ligado por padrão (Rust e Python são processos diferentes tocando o mesmo arquivo), e o arquivo físico mora em **`data-collector/practice_valuation.db`** (dev)
-- **Continuação da Sessão 1 (chegada do spec funcional — desbloqueia Fase 1 e Fase 3)**: usuário trouxe `docs/spec_funcional_valuation_e_cripto.md` com os 7 modelos de valuation de ação (DCF/FCFF, Gordon/DDM, Bazin, Graham, Bancos, RNAV, Preço Teto Projetivo — cada um com inputs, fórmula e guarda de erro) e o score cripto de 9 indicadores (verde/vermelho, automatizáveis vs fallback manual pago). Isso mudou a decisão anterior sobre o schema: em vez de `assumption_set` genérico em JSON, decidido **uma tabela por modelo** (7 tabelas), como o próprio spec sugere — os campos agora são conhecidos e estáveis, então colunas tipadas validam melhor as guardas de erro que um JSON genérico. Fase 1 e Fase 3 atualizadas com o resumo; a spec completa (fórmulas, thresholds) fica no arquivo, não duplicada aqui
+- **Continuação da Sessão 1 (chegada do spec funcional — desbloqueia Fase 1 e Fase 3)**: usuário trouxe um documento com os 7 modelos de valuation de ação (DCF/FCFF, Gordon/DDM, Bazin, Graham, Bancos, RNAV, Preço Teto Projetivo — cada um com inputs, fórmula e guarda de erro) e o score cripto de 9 indicadores (verde/vermelho, automatizáveis vs fallback manual pago). Isso mudou a decisão anterior sobre o schema: em vez de `assumption_set` genérico em JSON, decidido **uma tabela por modelo** (7 tabelas) — os campos agora são conhecidos e estáveis, então colunas tipadas validam melhor as guardas de erro que um JSON genérico
+- **Continuação da Sessão 1 (consolidação em arquivo único)**: usuário pediu pra juntar tudo num arquivo só, bem organizado por seções, em vez de espalhar entre `PROJECT_STATE.md` + 2 arquivos em `docs/`. As duas specs (`spec_automacao_dados.md` e `spec_funcional_valuation_e_cripto.md`) foram incorporadas na íntegra dentro das Fases 2 e 3 (estrutura de módulos, mecânica da CVM, as 7 fórmulas completas, a tabela cheia do score cripto) e os arquivos removidos do repositório — o histórico deles continua acessível via `git log`/`git show` se precisar. A pasta `docs/` deixou de existir
 
 **Pendências pra próxima sessão** (em ordem):
 1. Implementar a primeira migration (`asset`, as 7 tabelas de valuation, `cripto_indicadores`) + adicionar `rusqlite` ao `Cargo.toml`
