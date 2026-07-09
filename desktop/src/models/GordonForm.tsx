@@ -66,7 +66,10 @@ function GordonForm() {
         <CardTitle>Fair Price (Gordon / DDM)</CardTitle>
       </CardHeader>
       <CardContent>
-        <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+        <form
+          onSubmit={handleSubmit}
+          className="grid grid-cols-1 gap-4 sm:grid-cols-2"
+        >
           <Field label="Ticker">
             <Input
               required
@@ -125,7 +128,11 @@ function GordonForm() {
             />
           </Field>
 
-          <Button type="submit" disabled={mutation.isPending}>
+          <Button
+            type="submit"
+            disabled={mutation.isPending}
+            className="sm:col-span-2"
+          >
             {mutation.isPending ? "Calculating..." : "Calculate"}
           </Button>
         </form>

@@ -47,9 +47,7 @@ function App() {
   const SelectedForm = MODELS[selectedModel].component;
 
   return (
-    <main
-      className={`mx-auto p-8 ${section === "saved" ? "max-w-4xl" : "max-w-md"}`}
-    >
+    <main className="mx-auto max-w-6xl p-8">
       <Tabs
         value={section}
         onValueChange={(value) => setSection(value as SectionKey)}

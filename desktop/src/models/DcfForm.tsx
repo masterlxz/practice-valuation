@@ -52,7 +52,7 @@ type DcfValuationResponse = {
 
 function SectionHeading({ children }: { children: string }) {
   return (
-    <h2 className="mt-2 text-sm font-semibold text-muted-foreground">
+    <h2 className="mt-2 text-sm font-semibold text-muted-foreground sm:col-span-2">
       {children}
     </h2>
   );
@@ -115,7 +115,10 @@ function DcfForm() {
         <CardTitle>Fair Price (DCF / FCFF)</CardTitle>
       </CardHeader>
       <CardContent>
-        <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+        <form
+          onSubmit={handleSubmit}
+          className="grid grid-cols-1 gap-4 sm:grid-cols-2"
+        >
           <Field label="Ticker">
             <Input
               required
@@ -280,7 +283,11 @@ function DcfForm() {
             />
           </Field>
 
-          <Button type="submit" disabled={mutation.isPending}>
+          <Button
+            type="submit"
+            disabled={mutation.isPending}
+            className="sm:col-span-2"
+          >
             {mutation.isPending ? "Calculating..." : "Calculate"}
           </Button>
         </form>
