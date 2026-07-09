@@ -14,7 +14,8 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             commands::bazin::calculate_bazin,
             commands::graham::calculate_graham,
-            commands::gordon::calculate_gordon
+            commands::gordon::calculate_gordon,
+            commands::dcf::calculate_dcf
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
