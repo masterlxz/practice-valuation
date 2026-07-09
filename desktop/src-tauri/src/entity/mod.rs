@@ -7,4 +7,5 @@ pub mod bazin_inputs;
 pub mod dcf_inputs;
 pub mod gordon_inputs;
 pub mod graham_inputs;
+pub mod rnav_inputs;
 pub mod valuation;

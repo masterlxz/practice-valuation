@@ -1,0 +1,117 @@
+use crate::error::AppError;
+
+pub struct RnavInputs {
+    pub landbank: f64,
+    pub inventory_at_market_value: f64,
+    pub net_cash: f64,
+    pub shares_outstanding: f64,
+}
+
+pub enum Verdict {
+    Barato,
+    Caro,
+}
+
+impl Verdict {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Verdict::Barato => "BARATO",
+            Verdict::Caro => "CARO",
+        }
+    }
+}
+
+pub struct ValuationOutcome {
+    pub fair_price: f64,
+    pub safety_margin: f64,
+    pub verdict: Verdict,
+}
+
+// RNAV_Total = Landbank + Estoque + Caixa_Líquido
+// RNAV/Ação  = RNAV_Total / Nº_Ações
+pub fn calculate(inputs: &RnavInputs, current_price: f64) -> Result<ValuationOutcome, AppError> {
+    if inputs.shares_outstanding <= 0.0 {
+        return Err(AppError::InvalidGuard);
+    }
+
+    let rnav_total = inputs.landbank + inputs.inventory_at_market_value + inputs.net_cash;
+    let fair_price = rnav_total / inputs.shares_outstanding;
+
+    let safety_margin = (fair_price - current_price) / fair_price;
+    let verdict = if safety_margin > 0.0 {
+        Verdict::Barato
+    } else {
+        Verdict::Caro
+    };
+
+    Ok(ValuationOutcome {
+        fair_price,
+        safety_margin,
+        verdict,
+    })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn barato_when_fair_price_above_current_price() {
+        let inputs = RnavInputs {
+            landbank: 500.0,
+            inventory_at_market_value: 300.0,
+            net_cash: 200.0,
+            shares_outstanding: 100.0,
+        };
+
+        let outcome = calculate(&inputs, 8.0).unwrap();
+
+        assert!((outcome.fair_price - 10.0).abs() < 1e-9);
+        assert!(outcome.safety_margin > 0.0);
+        assert_eq!(outcome.verdict.as_str(), "BARATO");
+    }
+
+    #[test]
+    fn caro_when_fair_price_below_current_price() {
+        let inputs = RnavInputs {
+            landbank: 500.0,
+            inventory_at_market_value: 300.0,
+            net_cash: 200.0,
+            shares_outstanding: 100.0,
+        };
+
+        let outcome = calculate(&inputs, 15.0).unwrap();
+
+        assert!(outcome.safety_margin < 0.0);
+        assert_eq!(outcome.verdict.as_str(), "CARO");
+    }
+
+    #[test]
+    fn handles_negative_net_cash() {
+        let inputs = RnavInputs {
+            landbank: 500.0,
+            inventory_at_market_value: 300.0,
+            net_cash: -400.0,
+            shares_outstanding: 100.0,
+        };
+
+        let outcome = calculate(&inputs, 3.0).unwrap();
+
+        assert!((outcome.fair_price - 4.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn rejects_non_positive_shares_outstanding() {
+        let inputs = RnavInputs {
+            landbank: 500.0,
+            inventory_at_market_value: 300.0,
+            net_cash: 200.0,
+            shares_outstanding: 0.0,
+        };
+
+        assert!(matches!(
+            calculate(&inputs, 8.0),
+            Err(AppError::InvalidGuard)
+        ));
+    }
+}

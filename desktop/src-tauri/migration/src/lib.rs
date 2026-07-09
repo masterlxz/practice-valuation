@@ -5,6 +5,7 @@ mod m20260709_152010_create_graham_inputs;
 mod m20260709_153134_create_gordon_inputs;
 mod m20260709_154525_create_dcf_inputs;
 mod m20260709_155420_create_banks_inputs;
+mod m20260709_160307_create_rnav_inputs;
 
 pub struct Migrator;
 
@@ -17,6 +18,7 @@ impl MigratorTrait for Migrator {
             Box::new(m20260709_153134_create_gordon_inputs::Migration),
             Box::new(m20260709_154525_create_dcf_inputs::Migration),
             Box::new(m20260709_155420_create_banks_inputs::Migration),
+            Box::new(m20260709_160307_create_rnav_inputs::Migration),
         ]
     }
 }
