@@ -2,9 +2,9 @@ use serde::Serialize;
 
 #[derive(Debug, thiserror::Error)]
 pub enum AppError {
-    #[error("yield desejado precisa ser maior que zero")]
+    #[error("desired yield must be greater than zero")]
     InvalidGuard,
-    #[error("erro de banco de dados: {0}")]
+    #[error("database error: {0}")]
     Database(#[from] sea_orm::DbErr),
 }
 

@@ -69,7 +69,7 @@ function App() {
 
   return (
     <main className="mx-auto max-w-md p-8">
-      <h1 className="mb-6 text-2xl font-semibold">Preço-Teto (Bazin)</h1>
+      <h1 className="mb-6 text-2xl font-semibold">Fair Price (Bazin)</h1>
 
       <form onSubmit={handleSubmit} className="flex flex-col gap-4">
         <label className="flex flex-col gap-1">
@@ -84,7 +84,7 @@ function App() {
         </label>
 
         <label className="flex flex-col gap-1">
-          Ano de referência
+          Reference year
           <input
             required
             type="number"
@@ -95,7 +95,7 @@ function App() {
         </label>
 
         <label className="flex flex-col gap-1">
-          Preço atual (R$)
+          Current price (R$)
           <input
             required
             type="number"
@@ -107,7 +107,7 @@ function App() {
         </label>
 
         <label className="flex flex-col gap-1">
-          Dividendo médio por ação (R$, últimos 5 anos)
+          Average dividend per share (R$, last 5 years)
           <input
             required
             type="number"
@@ -119,7 +119,7 @@ function App() {
         </label>
 
         <label className="flex flex-col gap-1">
-          Yield desejado (%)
+          Desired yield (%)
           <input
             required
             type="number"
@@ -135,7 +135,7 @@ function App() {
           disabled={mutation.isPending}
           className="rounded bg-black px-4 py-2 text-white disabled:opacity-50"
         >
-          {mutation.isPending ? "Calculando..." : "Calcular"}
+          {mutation.isPending ? "Calculating..." : "Calculate"}
         </button>
       </form>
 
@@ -146,17 +146,17 @@ function App() {
       {mutation.isSuccess && (
         <div className="mt-6 rounded border p-4">
           <p>
-            Preço-teto:{" "}
+            Fair price:{" "}
             <strong>R$ {mutation.data.valuation.fair_price?.toFixed(2)}</strong>
           </p>
           <p>
-            Margem de segurança:{" "}
+            Safety margin:{" "}
             <strong>
               {((mutation.data.valuation.safety_margin ?? 0) * 100).toFixed(1)}%
             </strong>
           </p>
           <p>
-            Veredito: <strong>{mutation.data.valuation.verdict}</strong>
+            Verdict: <strong>{mutation.data.valuation.verdict}</strong>
           </p>
         </div>
       )}
