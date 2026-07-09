@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { Fragment, useMemo, useState, type ReactNode } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { useQuery } from "@tanstack/react-query";
 import {
@@ -8,6 +8,7 @@ import {
   type ColumnDef,
 } from "@tanstack/react-table";
 import type { AppError, ValuationModel } from "../types";
+import { INPUT_FIELDS, formatInputValue } from "./inputFields";
 import { Button } from "@/components/ui/button";
 import VerdictBadge from "../components/VerdictBadge";
 import {
@@ -45,6 +46,19 @@ type TickerSummary = {
   latestUpdatedAt: string;
 };
 
+// The raw value is an ISO timestamp with nanosecond precision
+// (`2026-07-09T14:55:25.487759978+00:00`) — way more than a table column
+// needs and the main reason the table was overflowing horizontally.
+function formatDateTime(iso: string): string {
+  return new Date(iso).toLocaleString(undefined, {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
 // `list_valuations` already orders by updated_at desc, so the first row seen
 // per ticker while iterating is the latest one.
 function summarizeByTicker(valuations: ValuationModel[]): TickerSummary[] {
@@ -66,14 +80,52 @@ function summarizeByTicker(valuations: ValuationModel[]): TickerSummary[] {
   return [...summaries.values()];
 }
 
+// Fetched on demand (not bundled into `list_valuations`) since most rows in
+// the list are never expanded — no point joining all 7 input tables upfront.
+function AssumptionsRow({ valuation }: { valuation: ValuationModel }) {
+  const inputsQuery = useQuery<Record<string, unknown>, AppError>({
+    queryKey: ["valuation-inputs", valuation.id],
+    queryFn: () =>
+      invoke("get_valuation_inputs", {
+        valuationId: valuation.id,
+        model: valuation.model,
+      }),
+  });
+
+  const fields = INPUT_FIELDS[valuation.model] ?? [];
+
+  if (inputsQuery.isLoading) {
+    return <p className="text-muted-foreground">Loading assumptions...</p>;
+  }
+
+  if (inputsQuery.isError) {
+    return <p className="text-red-600">{inputsQuery.error.message}</p>;
+  }
+
+  return (
+    <dl className="grid grid-cols-2 gap-x-6 gap-y-1 text-sm">
+      {fields.map((field) => (
+        <div key={field.key} className="flex justify-between gap-4">
+          <dt className="text-muted-foreground">{field.label}</dt>
+          <dd>{formatInputValue(inputsQuery.data?.[field.key], field.format)}</dd>
+        </div>
+      ))}
+    </dl>
+  );
+}
+
 function DataTable<T>({
   columns,
   data,
   onRowClick,
+  isRowExpanded,
+  renderExpandedRow,
 }: {
   columns: ColumnDef<T, any>[];
   data: T[];
   onRowClick?: (row: T) => void;
+  isRowExpanded?: (row: T) => boolean;
+  renderExpandedRow?: (row: T) => ReactNode;
 }) {
   const table = useReactTable({
     data,
@@ -111,17 +163,25 @@ function DataTable<T>({
           </TableRow>
         )}
         {table.getRowModel().rows.map((row) => (
-          <TableRow
-            key={row.id}
-            onClick={() => onRowClick?.(row.original)}
-            className={onRowClick ? "cursor-pointer" : undefined}
-          >
-            {row.getVisibleCells().map((cell) => (
-              <TableCell key={cell.id}>
-                {flexRender(cell.column.columnDef.cell, cell.getContext())}
-              </TableCell>
-            ))}
-          </TableRow>
+          <Fragment key={row.id}>
+            <TableRow
+              onClick={() => onRowClick?.(row.original)}
+              className={onRowClick ? "cursor-pointer" : undefined}
+            >
+              {row.getVisibleCells().map((cell) => (
+                <TableCell key={cell.id}>
+                  {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                </TableCell>
+              ))}
+            </TableRow>
+            {renderExpandedRow && isRowExpanded?.(row.original) && (
+              <TableRow>
+                <TableCell colSpan={columns.length} className="bg-muted/30">
+                  {renderExpandedRow(row.original)}
+                </TableCell>
+              </TableRow>
+            )}
+          </Fragment>
         ))}
       </TableBody>
     </Table>
@@ -141,47 +201,74 @@ const LIST_COLUMNS: ColumnDef<TickerSummary, any>[] = [
     header: "Latest verdict",
     cell: (info) => <VerdictBadge verdict={info.getValue<string | null>()} />,
   },
-  { accessorKey: "latestUpdatedAt", header: "Last updated" },
+  {
+    accessorKey: "latestUpdatedAt",
+    header: "Last updated",
+    cell: (info) => formatDateTime(info.getValue<string>()),
+  },
 ];
 
-const DETAIL_COLUMNS: ColumnDef<ValuationModel, any>[] = [
-  {
-    accessorKey: "model",
-    header: "Model",
-    cell: (info) => MODEL_LABELS[info.getValue<string>()] ?? info.getValue(),
-  },
-  { accessorKey: "reference_year", header: "Reference year" },
-  {
-    accessorKey: "current_price",
-    header: "Current price",
-    cell: (info) => `R$ ${info.getValue<number>().toFixed(2)}`,
-  },
-  {
-    accessorKey: "fair_price",
-    header: "Fair price",
-    cell: (info) => {
-      const value = info.getValue<number | null>();
-      return value === null ? "—" : `R$ ${value.toFixed(2)}`;
+function getDetailColumns(
+  expandedId: number | null,
+  onToggleExpanded: (id: number) => void,
+): ColumnDef<ValuationModel, any>[] {
+  return [
+    {
+      accessorKey: "model",
+      header: "Model",
+      cell: (info) => MODEL_LABELS[info.getValue<string>()] ?? info.getValue(),
     },
-  },
-  {
-    accessorKey: "safety_margin",
-    header: "Safety margin",
-    cell: (info) => {
-      const value = info.getValue<number | null>();
-      return value === null ? "—" : `${(value * 100).toFixed(1)}%`;
+    { accessorKey: "reference_year", header: "Reference year" },
+    {
+      accessorKey: "current_price",
+      header: "Current price",
+      cell: (info) => `R$ ${info.getValue<number>().toFixed(2)}`,
     },
-  },
-  {
-    accessorKey: "verdict",
-    header: "Verdict",
-    cell: (info) => <VerdictBadge verdict={info.getValue<string | null>()} />,
-  },
-  { accessorKey: "updated_at", header: "Updated at" },
-];
+    {
+      accessorKey: "fair_price",
+      header: "Fair price",
+      cell: (info) => {
+        const value = info.getValue<number | null>();
+        return value === null ? "—" : `R$ ${value.toFixed(2)}`;
+      },
+    },
+    {
+      accessorKey: "safety_margin",
+      header: "Safety margin",
+      cell: (info) => {
+        const value = info.getValue<number | null>();
+        return value === null ? "—" : `${(value * 100).toFixed(1)}%`;
+      },
+    },
+    {
+      accessorKey: "verdict",
+      header: "Verdict",
+      cell: (info) => <VerdictBadge verdict={info.getValue<string | null>()} />,
+    },
+    {
+      accessorKey: "updated_at",
+      header: "Updated at",
+      cell: (info) => formatDateTime(info.getValue<string>()),
+    },
+    {
+      id: "assumptions",
+      header: "Assumptions",
+      cell: ({ row }) => (
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => onToggleExpanded(row.original.id)}
+        >
+          {expandedId === row.original.id ? "Hide" : "View"}
+        </Button>
+      ),
+    },
+  ];
+}
 
 function SavedValuationsPanel() {
   const [view, setView] = useState<View>({ screen: "list" });
+  const [expandedId, setExpandedId] = useState<number | null>(null);
 
   const valuationsQuery = useQuery<ValuationModel[], AppError>({
     queryKey: ["valuations"],
@@ -193,6 +280,14 @@ function SavedValuationsPanel() {
   const tickerSummaries = useMemo(
     () => summarizeByTicker(valuations),
     [valuations],
+  );
+
+  const detailColumns = useMemo(
+    () =>
+      getDetailColumns(expandedId, (id) =>
+        setExpandedId((current) => (current === id ? null : id)),
+      ),
+    [expandedId],
   );
 
   if (view.screen === "detail") {
@@ -214,7 +309,12 @@ function SavedValuationsPanel() {
           </div>
         </CardHeader>
         <CardContent>
-          <DataTable columns={DETAIL_COLUMNS} data={tickerValuations} />
+          <DataTable
+            columns={detailColumns}
+            data={tickerValuations}
+            isRowExpanded={(row) => row.id === expandedId}
+            renderExpandedRow={(row) => <AssumptionsRow valuation={row} />}
+          />
         </CardContent>
       </Card>
     );

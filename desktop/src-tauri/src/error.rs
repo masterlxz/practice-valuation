@@ -8,6 +8,8 @@ pub enum AppError {
     EqualThresholds,
     #[error("no threshold configured for indicator '{0}'")]
     UnknownIndicator(String),
+    #[error("not found: {0}")]
+    NotFound(String),
     #[error("database error: {0}")]
     Database(#[from] sea_orm::DbErr),
 }
@@ -18,6 +20,7 @@ impl AppError {
             AppError::InvalidGuard => "INVALID_GUARD",
             AppError::EqualThresholds => "EQUAL_THRESHOLDS",
             AppError::UnknownIndicator(_) => "UNKNOWN_INDICATOR",
+            AppError::NotFound(_) => "NOT_FOUND",
             AppError::Database(_) => "DATABASE_ERROR",
         }
     }

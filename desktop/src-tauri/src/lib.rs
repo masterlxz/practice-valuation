@@ -21,7 +21,8 @@ pub fn run() {
             commands::projected_ceiling::calculate_projected_ceiling,
             commands::crypto_indicator::record_crypto_indicator,
             commands::crypto_indicator::list_crypto_indicators,
-            commands::valuation::list_valuations
+            commands::valuation::list_valuations,
+            commands::valuation::get_valuation_inputs
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
