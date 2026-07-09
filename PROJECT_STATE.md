@@ -2,7 +2,7 @@
 
 > Este arquivo é o centro de controle do projeto. Atualizado a cada sessão de trabalho.
 > Pode ser lido por qualquer instância do Claude Code em qualquer máquina para retomar o contexto.
-> Última atualização: 2026-07-09 (Sessão 2, fim — fatia vertical do Bazin fechada ponta a ponta: migration rodada, entities geradas, `domain/`+`commands/`+erro+tela React funcionando, confirmado visualmente na janela do Tauri. Retomar por "Pendências pra próxima sessão", item 1)
+> Última atualização: 2026-07-09 (Sessão 4, fim — score cripto dos 9 indicadores fechado ponta a ponta, Fase 3 completa por inteiro. Retomar por "Pendências pra próxima sessão", item 1 — Fase 4, interface de verdade)
 
 ---
 
@@ -78,10 +78,10 @@ Substitui a ideia original de planilha (ver Fase 2, histórico) por um app com b
 
 ```
 Fase 0 — Fundamentos & Decisões de Arquitetura   [~] Em andamento (0.1–0.5 ✓, falta 0.6)
-Fase 1 — Modelo de Dados (schema do banco local)  [~] Em andamento (entidades e driver decididos, falta a migration)
+Fase 1 — Modelo de Dados (schema do banco local)  [~] Em andamento (migrations rodando normalmente a cada modelo, falta só formalizar 1.3 como concluída)
 Fase 2 — Coleta de Dados (ações BR + cripto)      [ ] Não iniciada
-Fase 3 — Motor de Cálculo (preço-teto/valuation)  [~] Em andamento (metodologias definidas, cálculo não implementado)
-Fase 4 — Interface Desktop                        [ ] Não iniciada
+Fase 3 — Motor de Cálculo (preço-teto/valuation)  [x] Completa — 7 modelos de ação + score cripto (9 indicadores), todos ponta a ponta
+Fase 4 — Interface Desktop                        [ ] Não iniciada — próxima frente (rascunho cru dos formulários já existe, falta a interface de verdade)
 Fase 5 — Monitoramento & Alertas                  [ ] Não iniciada
 Fase 6 — Publicação (GitHub público)               [ ] Não iniciada
 ```
@@ -166,7 +166,7 @@ Princípio: não misturar regra de negócio com acesso a banco — o mesmo motiv
 - [x] 1.1 — Entidades validadas — desbloqueado pela chegada do spec funcional (Sessão 1). Ver "Mudança de abordagem" acima
 - [x] 1.2 — Driver/ORM Rust: **SeaORM** — decidido na Sessão 1 (revisado depois de decidir `rusqlite` na mesma sessão). Motivo: o usuário já tem hábito de pensar em ORM (estilo Django/SQLAlchemy/ActiveRecord); `rusqlite` exigiria escrever SQL cru e mapear linha a linha na mão, atrito maior do que ganho de simplicidade pra quem tá aprendendo Rust e banco ao mesmo tempo. SeaORM imita bem esse modelo mental (`Entity::find().all(&db)`, migrations via `sea-orm-cli`, geração de entity a partir do schema). É assíncrono, mas isso não é custo extra real — o Tauri já roda sobre `tokio`. Trade-off aceito: SeaORM é mais novo/menos batalhado que Diesel (a alternativa "ORM maduro", descartada pela sintaxe de query mais macro-pesada e curva de compilador mais dura)
 - [x] 1.2b — **Modo WAL** (Write-Ahead Log) do SQLite será ligado por padrão — Rust e Python são processos diferentes lendo/escrevendo o mesmo arquivo, e WAL deixa isso coexistir melhor (menos "database is locked")
-- [ ] 1.3 — Migrations iniciais (abordagem simples: arquivos SQL versionados aplicados em ordem, sem framework pesado — combina com o "só precisa funcionar" da filosofia do projeto). Próximo passo concreto da Fase 1
+- [x] 1.3 — Migrations iniciais (abordagem simples: arquivos SQL versionados aplicados em ordem, sem framework pesado). Rodando normalmente desde a Sessão 2 — cada modelo/indicador novo ganha sua própria migration (`sea-orm-cli migrate generate`), aplicada com `migrate up`. Marco final: 9 migrations aplicadas (`valuation`+`bazin_inputs`, uma por modelo de ação, `indicator_thresholds`+`crypto_indicators`)
 
 ---
 
@@ -413,8 +413,8 @@ Diferente de ação (1x/ano), aqui é um **score contínuo**: cada indicador vir
 **Etapas**:
 - [x] 3.1 — Lista de metodologias entregue (Sessão 1) — ver esta seção completa
 - [x] 3.2 — Modelar cada metodologia (dos 7 modelos acima) como função pura Rust: inputs (tabela específica do modelo) → resultado (`preco_justo`, `margem_seguranca`, `veredito`), aplicando as guardas de erro — **concluído na Sessão 3**: os 7 modelos (Bazin, Graham, Gordon/DDM, DCF/FCFF, Bancos, RNAV, Preço Teto Projetivo) fechados ponta a ponta
-- [ ] 3.3 — Motor do score cripto: calcular sinal (verde/vermelho) por indicador com threshold configurável, gravar em `cripto_indicadores`, somar o score
-- [ ] 3.4 — Permitir salvar quantos cálculos o usuário quiser por ativo (já é a natureza do schema — cada linha é um cálculo, nada sobrescreve), todos comparáveis lado a lado na UI
+- [x] 3.3 — Motor do score cripto — **concluído na Sessão 4**: sinal verde/neutro/vermelho por indicador com threshold configurável (tabela `indicator_thresholds`), leituras salvas em série temporal (`crypto_indicators`), score somado no front (verdes/9). Ver Log de Sessões pra detalhes de schema/domínio
+- [ ] 3.4 — Permitir salvar quantos cálculos o usuário quiser por ativo (já é a natureza do schema — cada linha é um cálculo, nada sobrescreve), todos comparáveis lado a lado na UI — a parte de schema já está resolvida, falta só a tela de comparação (Fase 4)
 
 ---
 
@@ -561,9 +561,24 @@ Diferente de ação (1x/ano), aqui é um **score contínuo**: cada indicador vir
 - **Fatia vertical do Preço Teto Projetivo fechada — 7º e último modelo de valuation de ação, Fase 3.2 concluída por completo**: migration `create_projected_ceiling_inputs` (`current_dividend`/D0, `expected_growth`/g, `projection_years`/N, `desired_yield`, `ke`) com FK cascata pra `valuation`. **Primeira vez com input inteiro** entre os 7 modelos: `projection_years` é `integer()`/`i32` (como o `reference_year` da tabela `valuation`), não `double()`/`f64` — e a fórmula usa `powi` (potência com expoente inteiro) em vez de `powf`. Sem guarda explícita na spec (mesma situação do RNAV); guardado `desired_yield <= 0.0` no `src/domain/projected_ceiling.rs`, já que esse modelo é literalmente "Bazin com N anos de projeção e desconto a valor presente" (`Dividendo_Projetado_N = D0×(1+g)^N`, `Preço_Teto_Futuro_N = Dividendo_Projetado_N/Yield_Desejado`, `Preço_Teto_Projetivo = Preço_Teto_Futuro_N/(1+Ke)^N`). 4 testes unitários passando, incluindo um de sanidade (`N=0` colapsa pro Bazin puro). `src/commands/projected_ceiling.rs` (`calculate_projected_ceiling`); registrado em `domain/mod.rs`, `commands/mod.rs`, `lib.rs`; `src/models/ProjectedCeilingForm.tsx` criado e adicionado ao seletor. `cargo check`, `cargo test --lib domain::projected_ceiling` (4/4) e `tsc --noEmit` passando. Smoke test real rodado (**os 7 modelos no seletor de uma vez**) — **usuário confirmou visualmente que todos calculam corretamente**
 - **Marco**: Fase 3.2 marcada como concluída no roadmap — os 7 modelos de valuation de ação (Bazin, Graham, Gordon/DDM, DCF/FCFF, Bancos, RNAV, Preço Teto Projetivo) estão fechados ponta a ponta (cálculo → persistência → UI), cada um com guarda de erro, testes unitários e confirmação visual do usuário
 
+### 2026-07-09 — Sessão 4
+
+- **Score cripto (Fase 3.3) fechado ponta a ponta — planejada com `/plan` antes de implementar**, mesmo cuidado usado no DCF por ser estruturalmente diferente dos 7 modelos anteriores (não é "formulário → preço-justo", é "log de leituras ao longo do tempo → placar"). Duas decisões de desenho foram levadas ao usuário antes do schema (respostas já refletidas no código):
+  - **Faixa entre os dois limiares de cada indicador → três estados** (verde/neutro/vermelho), em vez de forçar binário — guarda os dois números da spec (ex.: MVRV Z-Score: verde <0, vermelho >7) sem descartar nenhum. O placar continua "quantos estão verdes de 9" (neutro não conta como verde)
+  - **Navegação → seção separada**, alternador simples no topo do `App.tsx` ("Valuation" / "Crypto Score"), em vez de somar como 8ª opção no dropdown dos 7 modelos (que é conceitualmente outra coisa — modelo de valuation vs. placar de indicadores)
+- **Motor genérico, não 9 módulos separados**: diferente dos 7 modelos de ação (uma tabela de inputs por modelo), aqui os 9 indicadores compartilham a mesma forma (valor vs. dois limiares configuráveis) — então uma tabela de leituras (`crypto_indicators`) + uma tabela de limiares configuráveis (`indicator_thresholds`, semeada pela própria migration com os 9 valores de partida) + uma função de classificação única bastam. **Achado de modelagem**: a direção de cada indicador ("menor é melhor" vs. "maior é melhor") não precisou de uma coluna própria — é inferida comparando os dois limiares (`green_boundary > red_boundary` ⇒ maior é melhor), verificado contra os 9 indicadores da spec
+- **Indicadores de tendência (NVT vs. média móvel de 90d, TVL/endereços ativos MoM)**: pra manter o domínio Rust uma função pura sem I/O (mesmo princípio dos 7 modelos), esses indicadores entram como um valor **já normalizado** (ex.: razão NVT/MM90d, variação % mês a mês) em vez do número bruto — quem calcula essa normalização é quem registra a leitura (manual por enquanto, já que a Fase 2/coleta automatizada ainda não existe)
+- **Valores-semente dos 9 limiares**: só 3 indicadores (MVRV Z-Score, Puell Multiple, Staking Yield) tinham os dois números exatos na spec original — os outros 6 foram documentados como chute inicial (`nvt_ratio`, `net_issuance`, `tvl_trend`, `active_addresses_trend`, `exchange_netflow`, `fees_vs_emission`), ajustáveis depois direto na tabela `indicator_thresholds` sem precisar de migration nova (a própria spec já avisa que os thresholds são "ponto de partida ajustável, não regra imutável")
+- Implementação: migration `create_crypto_score_tables` (duas tabelas, sem FK entre elas — `indicator` é só uma chave de texto compartilhada, não uma referência formal) + seed via SQL bruto (`execute_unprepared`); `src/domain/crypto_score.rs` (`classify()`, guarda de limiares iguais, 7 testes unitários); `src/commands/crypto_indicator.rs` (`record_crypto_indicator`, `list_crypto_indicators`); `src/crypto/indicators.ts` (mapa dos 9 rótulos) + `src/crypto/CryptoScorePanel.tsx` (formulário de registro + tabela "leitura mais recente por indicador" + resumo "Verdes: X/9 (Y logados)", reduzido no client a partir da lista de leituras — sem query de agregação dedicada); `App.tsx` ganhou o alternador de seção
+- Novas variantes em `AppError`: `EqualThresholds` e `UnknownIndicator` (mensagem própria, não reaproveitam a de `InvalidGuard`)
+- **Achado (não corrigido, fora do escopo desta sessão)**: `AppError::InvalidGuard` serializa sempre a mesma mensagem fixa ("desired yield must be greater than zero"), reaproveitada por engano pelos 7 modelos mesmo quando a guarda é outra (ex.: `WACC − g` no DCF, `LPA/VPA` no Graham) — mensagem enganosa na UI, registrado aqui pra corrigir numa sessão futura, não misturado com o trabalho de hoje
+- `cargo check`, `cargo test --lib` (39 testes, todos passando — os 32 anteriores + 7 novos do score cripto) e `npx tsc --noEmit` limpos. Smoke test real rodado (`docker compose up`) — **usuário confirmou visualmente que o alternador de seção e o registro/classificação de leituras funcionam**
+- Usuário perguntou se a interface atual era o design final — confirmado que não, é rascunho cru de propósito (mesma nota da Fase 4 desde a Sessão 3); com o score cripto fechado, a Fase 3 está **completa por inteiro** (7 modelos + cripto), então a Fase 4 (interface de verdade — shadcn/ui, navegação real, lista de ativos, telas de análise) é a próxima frente natural
+- **Marco**: Fase 3 marcada como completa no "Status Geral" — não sobra nenhum modelo/indicador de valuation pendente de implementar antes da Fase 4
+
 **Pendências pra próxima sessão** (em ordem):
-1. `cripto_indicadores` (Fase 3.3 — score de 9 indicadores verde/vermelho pro Ethereum, tabela de série temporal, thresholds configuráveis) — próxima frente de trabalho agora que os 7 modelos de ação estão prontos
-2. Fase 3.4 (comparar cálculos salvos lado a lado) já está parcialmente resolvida pelo schema (cada cálculo é uma linha nova, nada sobrescreve), mas falta a tela de listagem/comparação — isso é trabalho de Fase 4, não Fase 3
+1. **Fase 4 (Interface Desktop)** — próxima frente de trabalho agora que a Fase 3 está completa por inteiro (7 modelos + score cripto). Começar por 4.1 (lista de ativos acompanhados) e 4.2 (tela de detalhe/análise por ativo, histórico de cálculos salvos lado a lado), instalando shadcn/ui antes de desenhar a navegação real
+2. Corrigir a mensagem genérica de `AppError::InvalidGuard` (achado da Sessão 4 — hoje toda guarda dos 7 modelos mostra a mesma frase do Bazin na UI, independente de qual guarda disparou)
 3. README.md e LICENSE na raiz do repo ainda não existem (Fase 0.5/6.2/6.3)
 4. Quando o usuário voltar a mexer no TruthID mobile, lembrar que o cache Docker foi limpo (Sessão 1 do Practice Valuation) — primeiro `docker compose up` de lá vai ser mais lento
 5. Se algum dia migrar a imagem Docker (Node/Debian), lembrar dos 3 fixes de rede/instalação da Sessão 1 (IPv6, npm audit, node_modules corrompido) — não são óbvios

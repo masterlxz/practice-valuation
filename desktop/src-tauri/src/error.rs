@@ -4,6 +4,10 @@ use serde::Serialize;
 pub enum AppError {
     #[error("desired yield must be greater than zero")]
     InvalidGuard,
+    #[error("green and red boundaries must differ to define a direction")]
+    EqualThresholds,
+    #[error("no threshold configured for indicator '{0}'")]
+    UnknownIndicator(String),
     #[error("database error: {0}")]
     Database(#[from] sea_orm::DbErr),
 }
@@ -12,6 +16,8 @@ impl AppError {
     fn code(&self) -> &'static str {
         match self {
             AppError::InvalidGuard => "INVALID_GUARD",
+            AppError::EqualThresholds => "EQUAL_THRESHOLDS",
+            AppError::UnknownIndicator(_) => "UNKNOWN_INDICATOR",
             AppError::Database(_) => "DATABASE_ERROR",
         }
     }

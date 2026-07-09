@@ -7,6 +7,7 @@ mod m20260709_154525_create_dcf_inputs;
 mod m20260709_155420_create_banks_inputs;
 mod m20260709_160307_create_rnav_inputs;
 mod m20260709_160929_create_projected_ceiling_inputs;
+mod m20260709_212958_create_crypto_score_tables;
 
 pub struct Migrator;
 
@@ -21,6 +22,7 @@ impl MigratorTrait for Migrator {
             Box::new(m20260709_155420_create_banks_inputs::Migration),
             Box::new(m20260709_160307_create_rnav_inputs::Migration),
             Box::new(m20260709_160929_create_projected_ceiling_inputs::Migration),
+            Box::new(m20260709_212958_create_crypto_score_tables::Migration),
         ]
     }
 }
