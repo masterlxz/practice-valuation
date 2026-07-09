@@ -1,3 +1,5 @@
+use std::sync::atomic::AtomicBool;
+
 mod commands;
 mod db;
 mod domain;
@@ -11,6 +13,7 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .manage(db)
+        .manage(AtomicBool::new(false))
         .invoke_handler(tauri::generate_handler![
             commands::bazin::calculate_bazin,
             commands::graham::calculate_graham,
@@ -22,7 +25,9 @@ pub fn run() {
             commands::crypto_indicator::record_crypto_indicator,
             commands::crypto_indicator::list_crypto_indicators,
             commands::valuation::list_valuations,
-            commands::valuation::get_valuation_inputs
+            commands::valuation::get_valuation_inputs,
+            commands::collector::run_stock_collector,
+            commands::collector::list_stock_quotes
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

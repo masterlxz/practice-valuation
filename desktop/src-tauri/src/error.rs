@@ -10,6 +10,10 @@ pub enum AppError {
     UnknownIndicator(String),
     #[error("not found: {0}")]
     NotFound(String),
+    #[error("data collector is already running")]
+    CollectorBusy,
+    #[error("data collector failed: {0}")]
+    CollectorFailed(String),
     #[error("database error: {0}")]
     Database(#[from] sea_orm::DbErr),
 }
@@ -21,6 +25,8 @@ impl AppError {
             AppError::EqualThresholds => "EQUAL_THRESHOLDS",
             AppError::UnknownIndicator(_) => "UNKNOWN_INDICATOR",
             AppError::NotFound(_) => "NOT_FOUND",
+            AppError::CollectorBusy => "COLLECTOR_BUSY",
+            AppError::CollectorFailed(_) => "COLLECTOR_FAILED",
             AppError::Database(_) => "DATABASE_ERROR",
         }
     }

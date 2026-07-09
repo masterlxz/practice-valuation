@@ -1,0 +1,9 @@
+# Tickers fictícios/públicos usados como exemplo (não é o portfólio real do
+# usuário — ver "Diretriz de segurança" no PROJECT_STATE.md). Os 4 abaixo
+# funcionam na API da brapi sem token nenhum; qualquer outro ticker exige
+# BRAPI_TOKEN configurado em .env.
+stocks:
+  - PETR4
+  - MGLU3
+  - VALE3
+  - ITUB4

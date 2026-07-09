@@ -1,5 +1,6 @@
 pub mod banks;
 pub mod bazin;
+pub mod collector;
 pub mod crypto_indicator;
 pub mod dcf;
 pub mod gordon;

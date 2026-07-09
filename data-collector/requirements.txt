@@ -1,1 +1,3 @@
-# Preenchido na Fase 2.2, conforme os coletores forem implementados.
+requests
+PyYAML
+python-dotenv

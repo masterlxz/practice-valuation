@@ -2,7 +2,7 @@
 
 > Este arquivo é o centro de controle do projeto. Atualizado a cada sessão de trabalho.
 > Pode ser lido por qualquer instância do Claude Code em qualquer máquina para retomar o contexto.
-> Última atualização: 2026-07-09 (Sessão 4, fim — score cripto fechado (Fase 3 completa), tela "Saved Valuations" completa (incl. detalhe fino de premissas), os 7 formulários + painel cripto vestidos com shadcn/ui, identidade visual dark navy + verde definida, layout geral em grid (menos vertical), painel cripto redesenhado como dashboard (KPI tiles + update em lote), e mensagens de guarda (`InvalidGuard`) corrigidas pra ser específicas por modelo. Retomar por "Pendências pra próxima sessão", item 1 — decidir entre Fase 2 e Fase 5)
+> Última atualização: 2026-07-09 (Sessão 4, fim — Fase 3 completa (7 modelos + score cripto), Fase 4 avançada (Saved Valuations completo, tudo vestido com shadcn/ui, identidade visual dark+verde, layout em grid), mensagens de guarda corrigidas, e **Fase 2 iniciada**: primeira fonte de dado real (cotação de ações via brapi) rodando ponta a ponta — botão na aba Valuation → subprocess Python → grava em `stock_quotes`. Retomar por "Pendências pra próxima sessão", item 1)
 
 ---
 
@@ -79,7 +79,7 @@ Substitui a ideia original de planilha (ver Fase 2, histórico) por um app com b
 ```
 Fase 0 — Fundamentos & Decisões de Arquitetura   [~] Em andamento (0.1–0.5 ✓, falta 0.6)
 Fase 1 — Modelo de Dados (schema do banco local)  [~] Em andamento (migrations rodando normalmente a cada modelo, falta só formalizar 1.3 como concluída)
-Fase 2 — Coleta de Dados (ações BR + cripto)      [ ] Não iniciada
+Fase 2 — Coleta de Dados (ações BR + cripto)      [~] Em andamento (cotação via brapi funcionando ponta a ponta; fundamentos via CVM, bolsai e as fontes de cripto ainda faltam)
 Fase 3 — Motor de Cálculo (preço-teto/valuation)  [x] Completa — 7 modelos de ação + score cripto (9 indicadores), todos ponta a ponta
 Fase 4 — Interface Desktop                        [~] Em andamento (shadcn/ui + TanStack Table instalados, tela de valuations salvos completa incl. detalhe fino de premissas, 7 formulários + painel cripto vestidos, identidade visual dark+verde definida)
 Fase 5 — Monitoramento & Alertas                  [ ] Não iniciada
@@ -236,7 +236,7 @@ Pra maioria das empresas "normais" (o grosso da lista), esse caminho sozinho já
   - Frontend: enquanto roda, mostra spinner; ao terminar, mostra um resumo (quantos ativos, sucesso/erro) — sem log ao vivo linha a linha por enquanto (pode vir depois se sentir falta)
   - **Guarda contra clique duplo/spam**: desabilitar o botão no frontend enquanto roda **e** ter uma trava no lado Rust (ex: `Mutex`/flag no estado do app) que recusa uma segunda chamada concorrente mesmo se disparada rápido demais — evita dois processos Python escrevendo no mesmo SQLite ao mesmo tempo e evita estourar rate limit das APIs gratuitas
   - A Fase 5 (alertas) pode um dia precisar de checagem periódica dos indicadores **já salvos** — isso é diferente de "puxar dado novo" e fica pra quando chegarmos lá
-- [ ] 2.2 — Implementar clientes de fonte de dados de ações (`acoes_bolsai.py`, `acoes_brapi.py`, `cvm_dfp.py`)
+- [~] 2.2 — Implementar clientes de fonte de dados de ações — **`acoes_brapi.py` (cotação) concluído na Sessão 4**; `acoes_bolsai.py` (fundamentos) e `cvm_dfp.py` (fundamentos via zip, mais complexo) ainda faltam
 - [ ] 2.3 — Implementar clientes de fonte de dados de cripto (`cripto_coingecko.py`, `cripto_defillama.py`, `cripto_ultrasound.py`, `cripto_etherscan.py`, `cripto_stakingrewards.py`)
 - [ ] 2.4 — Fallback de extração via PDF (`pdf_extractor.py` — pdfplumber + Claude), quando necessário
 
@@ -608,9 +608,19 @@ Diferente de ação (1x/ano), aqui é um **score contínuo**: cada indicador vir
 - `cargo check`, `cargo test --lib` (32 testes, todos passando) e `npx tsc --noEmit` limpos. Smoke test real rodado — **usuário confirmou visualmente que a mensagem de erro agora é específica por modelo** ("deu boa")
 - **Marco**: pendência #2 da lista anterior resolvida — não sobra nenhum item pequeno registrado, só a decisão de direção (Fase 2 vs Fase 5) e README/LICENSE
 
+- **Continuação da Sessão 4 (início da Fase 2 — usuário escolheu começar por aqui "aos poucos", reconhecendo que é mais complexa)**: primeira fatia vertical real de coleta de dados, **planejada com `/plan`** dado que atravessa 3 linguagens (Python, Rust, React) pela primeira vez. Escolhida cotação de ações via brapi como ponto de partida — API mais simples que a CVM (que exige baixar zip anual e fazer parsing de CSV), e resolve uma dor imediata (o "Current price" dos 7 formulários é digitado à mão)
+  - **API verificada de verdade antes de codar** (`WebFetch` em brapi.dev/docs, não por memória — o endpoint mudou de shape desde a spec original da Fase 2): `GET /api/v2/stocks/quote?symbols=...`, autenticação via header `Authorization: Bearer` (opcional pra 4 tickers de teste sem conta — PETR4, MGLU3, VALE3, ITUB4 — usados como exemplo fictício no `config.yaml`, não é portfólio real do usuário)
+  - **Decisão de schema nova**: cotação não é a mesma coisa que uma linha de `valuation` (que só existe quando um cálculo roda) — criada `stock_quotes` (`ticker`, `price`, `source`, `fetched_at`), série temporal, mesmo padrão de `crypto_indicators` (cada fetch é uma linha nova)
+  - **Python** (`data-collector/`): `sources/acoes_brapi.py` (`fetch_quotes`, token opcional via `.env`/`BRAPI_TOKEN`), `main.py` (orquestrador: lê `config.yaml`, chama a fonte, grava no SQLite compartilhado), `requirements.txt` (`requests`, `PyYAML`, `python-dotenv`), `.env.example`. Venv criado e testado manualmente contra a API real (`docker compose run ... .venv/bin/python3 main.py`) **antes** de plugar no botão — confirmou 4 cotações reais gravadas no banco
+  - **Rust**: `tokio` virou dependência direta com a feature `process` (antes só existia transitivo via sea-orm/sqlx — declarar explícito é mais seguro). `src/commands/collector.rs`: `run_stock_collector` (trava via `AtomicBool` gerenciado como state — recusa chamada concorrente, mesma trava contra clique duplo decidida desde a Fase 2.1) dispara `tokio::process::Command` no Python do venv e devolve stdout/stderr; `list_stock_quotes` no mesmo molde dos outros `list_*`. Duas variantes novas em `AppError`: `CollectorBusy`, `CollectorFailed`
+  - **Frontend**: `src/collector/StockCollectorPanel.tsx` — botão "Run stock collector" + resumo do resultado + tabela da cotação mais recente por ticker (mesmo padrão "reduz no client" já usado 3x nesta sessão). Usuário pediu pra tirar da aba própria e colocar dentro da aba **Valuation** (no topo, antes do seletor de modelo) — mais coerente já que é o "Current price" dali que ele resolve
+  - `cargo check`, `cargo test --lib` (32 testes, nada quebrou — collector não tem lógica de domínio, só orquestração) e `npx tsc --noEmit` limpos. Múltiplos smoke tests reais — **usuário confirmou visualmente que o botão busca cotação real da brapi e grava no banco** ("funcinou sim")
+  - Usuário perguntou duas vezes se os tickers de exemplo "ficam lá" — reforçado que é só config editável (`data-collector/config.yaml`), não hardcoded, sem risco de virar dado permanente ou vazar portfólio real
+- **Marco**: Fase 2 deixou de ser "não iniciada" — primeira fonte de dado real funcionando ponta a ponta (Python → SQLite → botão → UI). Próximas fontes (CVM, bolsai, cripto) seguem o mesmo molde já provado
+
 **Pendências pra próxima sessão** (em ordem):
-1. Decidir a próxima frente grande: **Fase 2** (coleta de dados — ainda não iniciada, clientes Python pra bolsai/brapi/CVM/CoinGecko/etc.) ou **Fase 5** (motor de alertas/zona de compra, mais contido, já aproveita 100% do que está no banco hoje mesmo sendo digitado à mão)
-2. README.md e LICENSE na raiz do repo ainda não existem (Fase 0.5/6.2/6.3) — usuário disse que prefere esperar ter mais "repertório" (mais telas/decisões tomadas) antes de escrever o README
+1. Fase 2, continuação: próxima fonte de dado (CVM — fundamentos pro DCF/RNAV/Bancos, mais complexa: zip anual + parsing de CSV — ou bolsai/cripto) — ver o "Log de Sessões" acima pro padrão já estabelecido (Python client → Rust subprocess command → tela)
+2. README.md e LICENSE na raiz do repo ainda não existem (Fase 0.5/6.2/6.3) — usuário disse que prefere esperar ter mais "repertório" antes de escrever o README
 3. Quando o usuário voltar a mexer no TruthID mobile, lembrar que o cache Docker foi limpo (Sessão 1 do Practice Valuation) — primeiro `docker compose up` de lá vai ser mais lento
 4. Se algum dia migrar a imagem Docker (Node/Debian), lembrar dos 3 fixes de rede/instalação da Sessão 1 (IPv6, npm audit, node_modules corrompido) — não são óbvios
 
