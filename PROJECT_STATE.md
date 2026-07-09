@@ -2,7 +2,7 @@
 
 > Este arquivo é o centro de controle do projeto. Atualizado a cada sessão de trabalho.
 > Pode ser lido por qualquer instância do Claude Code em qualquer máquina para retomar o contexto.
-> Última atualização: 2026-07-09 (Sessão 4, fim — score cripto fechado (Fase 3 completa), tela "Saved Valuations" criada, os 7 formulários + painel cripto vestidos com shadcn/ui, e identidade visual definida (dark navy + verde, inspirada no TruthID). Retomar por "Pendências pra próxima sessão", item 1)
+> Última atualização: 2026-07-09 (Sessão 4, fim — score cripto fechado (Fase 3 completa), tela "Saved Valuations" completa (incl. detalhe fino de premissas), os 7 formulários + painel cripto vestidos com shadcn/ui, identidade visual dark navy + verde definida, layout geral em grid (menos vertical) e o painel cripto redesenhado como dashboard (KPI tiles + update em lote). Retomar por "Pendências pra próxima sessão", item 1)
 
 ---
 
@@ -81,7 +81,7 @@ Fase 0 — Fundamentos & Decisões de Arquitetura   [~] Em andamento (0.1–0.5 
 Fase 1 — Modelo de Dados (schema do banco local)  [~] Em andamento (migrations rodando normalmente a cada modelo, falta só formalizar 1.3 como concluída)
 Fase 2 — Coleta de Dados (ações BR + cripto)      [ ] Não iniciada
 Fase 3 — Motor de Cálculo (preço-teto/valuation)  [x] Completa — 7 modelos de ação + score cripto (9 indicadores), todos ponta a ponta
-Fase 4 — Interface Desktop                        [~] Em andamento (shadcn/ui + TanStack Table instalados, tela de valuations salvos pronta, 7 formulários + painel cripto vestidos, identidade visual dark+verde definida)
+Fase 4 — Interface Desktop                        [~] Em andamento (shadcn/ui + TanStack Table instalados, tela de valuations salvos completa incl. detalhe fino de premissas, 7 formulários + painel cripto vestidos, identidade visual dark+verde definida)
 Fase 5 — Monitoramento & Alertas                  [ ] Não iniciada
 Fase 6 — Publicação (GitHub público)               [ ] Não iniciada
 ```
@@ -426,7 +426,7 @@ Diferente de ação (1x/ano), aqui é um **score contínuo**: cada indicador vir
 
 **Etapas**:
 - [x] 4.1 — Tela: lista de ativos acompanhados — **concluída na Sessão 4** como "Saved Valuations": tickers distintos derivados da tabela `valuation` (sem tabela `asset` própria — ver Log de Sessões)
-- [~] 4.2 — Tela: detalhe do ativo (histórico de cálculos salvos) — **parcialmente concluída na Sessão 4**: comparação lado a lado dos campos comuns (model, preço justo, margem, veredito, data) funcionando; falta mostrar as premissas específicas de cada modelo (ex.: qual dividendo médio foi usado no Bazin daquela linha), que exigiria juntar com as 7 tabelas de input
+- [x] 4.2 — Tela: detalhe do ativo (histórico de cálculos salvos) — **concluída na Sessão 4**: comparação lado a lado dos campos comuns, mais o detalhe fino (linha expansível "Assumptions" por cálculo, buscando a tabela de inputs certa conforme o `model`)
 - [x] 4.3 — Tela: cripto/indicadores — **vestida com shadcn/ui na Sessão 4** (mesmo painel de registro/placar, agora com Card/Select/Table/Badge em vez de HTML cru)
 - [ ] 4.4 — Tela: alertas/zona de compra
 - [x] 4.5 — Direção visual → **arejado, tipo dashboard** (Tailwind + shadcn/ui + TanStack Table), decidido na Sessão 1; **identidade de cor definida na Sessão 4** — dark navy + verde claro, inspirada no TruthID (ver Log de Sessões)
@@ -591,10 +591,23 @@ Diferente de ação (1x/ano), aqui é um **score contínuo**: cada indicador vir
 - `npx tsc --noEmit` limpo, `cargo check` sem novidade (nenhum arquivo Rust mudou nesta parte). Dois smoke tests reais rodados (`docker compose up`) — **usuário confirmou visualmente o reskin dos formulários/painel cripto** e, em seguida, **confirmou visualmente o tema dark+verde** ("top deu boa")
 - **Marco**: Fase 4.3 concluída (painel cripto vestido) e Fase 4.5 (direção visual) ganhou a identidade de cor definida, não só a decisão de biblioteca
 
+- **Continuação da Sessão 4 (4.2 fino — mostrar as premissas por modelo, última pendência de Fase 4 registrada)**: `src/commands/valuation.rs` ganhou `get_valuation_inputs(valuation_id, model)` — casa o `model` da linha com a tabela de input certa (`bazin_inputs`, `graham_inputs`, etc.) e devolve a linha encontrada como `serde_json::Value` (sem precisar de um enum Rust com 7 variantes só pra carregar isso — o front já sabe o formato de cada modelo). Novo `AppError::NotFound(String)`. `src/valuations/inputFields.ts` (novo) mapeia cada modelo pra sua lista de campos (rótulo + formatação `currency`/`percentage`/`number`/`integer`), espelhando os rótulos já usados nos 7 formulários de cálculo. `SavedValuationsPanel.tsx`: a tabela de detalhe ganhou uma coluna "Assumptions" com botão View/Hide por linha, que expande uma linha extra (`AssumptionsRow`, busca sob demanda via `get_valuation_inputs` — só quando expandida, não teria sentido buscar as 7 tabelas de input adiantado pra linhas que talvez nunca sejam abertas)
+- **Achado da própria sessão, verificado no código-fonte do macro `#[tauri::command]` do Tauri (`tauri-macros-2.6.3/src/command/wrapper.rs`)**: por padrão os argumentos de comando são convertidos pra `camelCase` do lado Rust→JS (`ArgumentCase::Camel`), então `valuation_id` (Rust) precisa ser chamado como `valuationId` no `invoke()` — confirmado antes de escrever o código, não descoberto por tentativa e erro
+- **Achado + correção, pedido do usuário**: a tela "Saved Valuations" ganhou barra de rolagem horizontal — causa raiz era o campo `updated_at` mostrando o timestamp ISO bruto com precisão de nanossegundo (`2026-07-09T14:55:25.487759978+00:00`). Adicionado `formatDateTime()` (formato curto tipo "Jul 9, 2026, 02:55 PM") nas duas tabelas (lista e detalhe) + container da seção alargado de `max-w-4xl` pra `max-w-6xl`
+- `cargo check`, `cargo test --lib` (32 testes) e `npx tsc --noEmit` limpos. Múltiplos smoke tests reais rodados — **usuário confirmou visualmente que o botão "View" expande as premissas corretamente** ("deu boa maninho") **e que a barra horizontal sumiu**
+- **Marco**: Fase 4.2 concluída por completo — não sobra nenhuma pendência conhecida de Fase 4 além de 4.4 (alertas, que depende da Fase 5) e do reskin visual já feito
+
+- **Continuação da Sessão 4 (ajustes de layout pedidos pelo usuário, depois de ver tudo rodando)**:
+  - **"Muito vertical, não preenche a tela"**: os 7 formulários + painel cripto usavam `flex flex-col` (uma coluna só, empilhada) dentro de um container `max-w-md` — em telas com muitos campos (DCF, 13 campos) isso virava uma rolagem longa sem aproveitar a largura da janela. Trocado por `grid grid-cols-1 sm:grid-cols-2` em todos (botão de submit com `sm:col-span-2` pra continuar ocupando a linha toda) + container do `App.tsx` unificado em `max-w-6xl` pra todas as seções (antes só "Saved Valuations" era largo). `Field` ganhou uma prop `className` opcional pra campos que precisam ocupar as duas colunas (ex.: o "Raw value" de descrição longa no painel cripto)
+  - **Painel cripto redesenhado como dashboard, não formulário**: usuário apontou que escolher 1 indicador por vez num dropdown e enviar não tinha cara de "tela de análise". Perguntei se "atualizar tudo com 1 botão" significava automatizar a coleta (Fase 2, que não existe) ou um formulário em lote — confirmado que é o formulário em lote. Reescrito: a tabela de 9 indicadores agora tem um campo de valor + fonte cada (`Drafts`, estado por indicador), um único campo de data compartilhado, e um botão **"Update all"** que dispara `record_crypto_indicator` uma vez por indicador preenchido (via `Promise.all` — sem comando novo no Rust, o comando existente já faz tudo que cada linha precisa). Indicadores com o campo vazio são ignorados (atualização parcial permitida)
+  - **Placar viesse tabela → grid de KPI tiles**: usuário pediu "dashboard horizontal". Consultado o skill `dataviz` antes de desenhar — a seção "choosing-a-form" confirma que "uma leva de números-manchete" é exatamente o caso de **KPI row de stat tiles**, não uma tabela. Substituído o placar (antes uma `Table` de 9 linhas) por um grid `sm:grid-cols-3` de `IndicatorTile` (label + valor + badge de sinal + data), seguindo o contrato de stat tile do skill (label, value, status) — paleta de cor mantida a que já existia no app (verde/amarelo/vermelho dos badges), não trocada pela paleta padrão do skill (ver `references/palette.md` do skill — é só um ponto de partida pra quem ainda não tem marca definida, e o app já tem a sua)
+  - `npx tsc --noEmit` limpo em cada etapa (nenhuma mudança em Rust nesta parte). Três smoke tests reais rodados — **usuário confirmou o grid mais largo, confirmou o "Update all" em lote, e confirmou o grid de KPI tiles** ("melhorou agora top")
+- **Marco**: layout geral do app deixou de ser uma coluna estreita só; painel cripto passou de "formulário de log" pra "tela de análise" de verdade, alinhado com o pedido original de "tipo uma planilha" (ver histórico da conversa) — dashboard, não formulário sequencial
+
 **Pendências pra próxima sessão** (em ordem):
-1. **Fase 4, continuação**: 4.2 fino (mostrar as premissas específicas de cada modelo na tela de detalhe, juntando com as 7 tabelas de input) e 4.4 (tela de alertas/zona de compra, depende da Fase 5 primeiro)
+1. Fase 4.4 (tela de alertas/zona de compra) só faz sentido depois da Fase 5 (motor de monitoramento) — considerar se a próxima frente é Fase 2 (coleta de dados, ainda não iniciada) ou Fase 5 diretamente
 2. Corrigir a mensagem genérica de `AppError::InvalidGuard` (achado da Sessão 4 — hoje toda guarda dos 7 modelos mostra a mesma frase do Bazin na UI, independente de qual guarda disparou)
-3. README.md e LICENSE na raiz do repo ainda não existem (Fase 0.5/6.2/6.3) — se o README ganhar screenshot, já vai refletir o tema dark+verde novo
+3. README.md e LICENSE na raiz do repo ainda não existem (Fase 0.5/6.2/6.3) — se o README ganhar screenshot, já vai refletir o tema dark+verde novo e o layout em grid
 4. Quando o usuário voltar a mexer no TruthID mobile, lembrar que o cache Docker foi limpo (Sessão 1 do Practice Valuation) — primeiro `docker compose up` de lá vai ser mais lento
 5. Se algum dia migrar a imagem Docker (Node/Debian), lembrar dos 3 fixes de rede/instalação da Sessão 1 (IPv6, npm audit, node_modules corrompido) — não são óbvios
 

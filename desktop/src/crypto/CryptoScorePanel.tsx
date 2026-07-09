@@ -14,13 +14,6 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
   Table,
   TableBody,
   TableCell,
@@ -55,6 +48,15 @@ const SIGNAL_STYLE: Record<CryptoIndicatorReading["signal"], string> = {
   RED: "bg-red-100 text-red-800 dark:bg-red-950 dark:text-red-300",
 };
 
+type DraftRow = { rawValue: string; source: string };
+type Drafts = Record<IndicatorKey, DraftRow>;
+
+function emptyDrafts(): Drafts {
+  return Object.fromEntries(
+    INDICATOR_KEYS.map((key) => [key, { rawValue: "", source: "" }]),
+  ) as Drafts;
+}
+
 function today(): string {
   return new Date().toISOString().slice(0, 10);
 }
@@ -74,12 +76,45 @@ function latestPerIndicator(
   return latest;
 }
 
+// KPI-row stat tile (one per indicator) — label, value, status. A 9-row
+// table read as a form; a grid of tiles reads as a dashboard.
+function IndicatorTile({
+  indicatorKey,
+  reading,
+}: {
+  indicatorKey: IndicatorKey;
+  reading?: CryptoIndicatorReading;
+}) {
+  return (
+    <div className="rounded-lg border border-border bg-card p-4">
+      <p className="text-sm text-muted-foreground">
+        {INDICATORS[indicatorKey]}
+      </p>
+      <p className="mt-1 text-2xl font-semibold">
+        {reading ? reading.raw_value : "—"}
+      </p>
+      <div className="mt-2 flex items-center justify-between gap-2">
+        {reading ? (
+          <Badge className={SIGNAL_STYLE[reading.signal]}>
+            {reading.signal}
+          </Badge>
+        ) : (
+          <span className="text-sm text-muted-foreground">not logged</span>
+        )}
+        {reading && (
+          <span className="text-xs text-muted-foreground">
+            {reading.reading_date}
+          </span>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function CryptoScorePanel() {
   const [coin, setCoin] = useState("ETH");
-  const [indicator, setIndicator] = useState<IndicatorKey>(INDICATOR_KEYS[0]);
   const [readingDate, setReadingDate] = useState(today());
-  const [rawValue, setRawValue] = useState("");
-  const [source, setSource] = useState("");
+  const [drafts, setDrafts] = useState<Drafts>(emptyDrafts());
 
   const queryClient = useQueryClient();
 
@@ -88,28 +123,44 @@ function CryptoScorePanel() {
     queryFn: () => invoke("list_crypto_indicators", { coin }),
   });
 
-  const mutation = useMutation<
-    CryptoIndicatorReading,
-    AppError,
-    RecordCryptoIndicatorRequest
-  >({
-    mutationFn: (request) => invoke("record_crypto_indicator", { request }),
+  // One backend call per filled-in indicator — there's no dedicated "batch
+  // insert" command, `record_crypto_indicator` already does exactly what
+  // each row needs (look up the threshold, classify, persist), so a single
+  // "Update all" click just fires it once per row that has a value.
+  const updateAllMutation = useMutation<void, AppError, void>({
+    mutationFn: async () => {
+      const entries = INDICATOR_KEYS.filter(
+        (key) => drafts[key].rawValue.trim() !== "",
+      );
+      await Promise.all(
+        entries.map((indicator) => {
+          const request: RecordCryptoIndicatorRequest = {
+            coin: coin.toUpperCase(),
+            indicator,
+            reading_date: readingDate,
+            raw_value: Number(drafts[indicator].rawValue),
+            source: drafts[indicator].source,
+          };
+          return invoke("record_crypto_indicator", { request });
+        }),
+      );
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["crypto-indicators", coin] });
-      setRawValue("");
-      setSource("");
+      setDrafts(emptyDrafts());
     },
   });
 
   function handleSubmit(event: FormEvent) {
     event.preventDefault();
-    mutation.mutate({
-      coin: coin.toUpperCase(),
-      indicator,
-      reading_date: readingDate,
-      raw_value: Number(rawValue),
-      source,
-    });
+    updateAllMutation.mutate();
+  }
+
+  function updateDraft(key: IndicatorKey, field: keyof DraftRow, value: string) {
+    setDrafts((current) => ({
+      ...current,
+      [key]: { ...current[key], [field]: value },
+    }));
   }
 
   const latest = latestPerIndicator(readingsQuery.data ?? []);
@@ -123,117 +174,90 @@ function CryptoScorePanel() {
         <CardTitle>Crypto Score</CardTitle>
       </CardHeader>
       <CardContent>
-        <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-          <Field label="Coin">
-            <Input
-              required
-              value={coin}
-              onChange={(e) => setCoin(e.currentTarget.value)}
-            />
-          </Field>
+        <p className="mb-3 text-lg font-medium">
+          Green: {greenCount}/9 ({latest.size} of 9 indicators logged)
+        </p>
 
-          <Field label="Indicator">
-            <Select
-              value={indicator}
-              onValueChange={(value) => setIndicator(value as IndicatorKey)}
-            >
-              <SelectTrigger className="w-full">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {INDICATOR_KEYS.map((key) => (
-                  <SelectItem key={key} value={key}>
-                    {INDICATORS[key]}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </Field>
-
-          <Field label="Reading date">
-            <Input
-              required
-              type="date"
-              value={readingDate}
-              onChange={(e) => setReadingDate(e.currentTarget.value)}
-            />
-          </Field>
-
-          <Field label="Raw value (already normalized when the indicator is trend-based — e.g. % change for TVL/active addresses, ratio to 90d average for NVT)">
-            <Input
-              required
-              type="number"
-              step="any"
-              value={rawValue}
-              onChange={(e) => setRawValue(e.currentTarget.value)}
-            />
-          </Field>
-
-          <Field label="Source">
-            <Input
-              required
-              value={source}
-              onChange={(e) => setSource(e.currentTarget.value)}
-              placeholder="ultrasound.money"
-            />
-          </Field>
-
-          <Button type="submit" disabled={mutation.isPending}>
-            {mutation.isPending ? "Recording..." : "Record reading"}
-          </Button>
-        </form>
-
-        {mutation.isError && (
-          <p className="mt-6 text-red-600">{mutation.error.message}</p>
+        {readingsQuery.isError && (
+          <p className="mb-3 text-red-600">{readingsQuery.error.message}</p>
         )}
 
-        <div className="mt-8">
-          <p className="mb-2 font-medium">
-            Green: {greenCount}/9 ({latest.size} of 9 indicators logged)
-          </p>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+          {INDICATOR_KEYS.map((key) => (
+            <IndicatorTile key={key} indicatorKey={key} reading={latest.get(key)} />
+          ))}
+        </div>
 
-          {readingsQuery.isError && (
-            <p className="text-red-600">{readingsQuery.error.message}</p>
-          )}
+        <h3 className="mt-8 mb-3 text-sm font-semibold text-muted-foreground">
+          Update readings
+        </h3>
+
+        <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <Field label="Coin">
+              <Input
+                required
+                value={coin}
+                onChange={(e) => setCoin(e.currentTarget.value)}
+              />
+            </Field>
+
+            <Field label="Reading date">
+              <Input
+                required
+                type="date"
+                value={readingDate}
+                onChange={(e) => setReadingDate(e.currentTarget.value)}
+              />
+            </Field>
+          </div>
 
           <Table>
             <TableHeader>
               <TableRow>
                 <TableHead>Indicator</TableHead>
                 <TableHead>Value</TableHead>
-                <TableHead>Signal</TableHead>
-                <TableHead>Date</TableHead>
+                <TableHead>Source</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {INDICATOR_KEYS.map((key) => {
-                const reading = latest.get(key);
-                return (
-                  <TableRow key={key}>
-                    <TableCell className="whitespace-normal">
-                      {INDICATORS[key]}
-                    </TableCell>
-                    <TableCell>{reading ? reading.raw_value : "—"}</TableCell>
-                    <TableCell>
-                      {reading ? (
-                        <Badge className={SIGNAL_STYLE[reading.signal]}>
-                          {reading.signal}
-                        </Badge>
-                      ) : (
-                        <span className="text-muted-foreground">
-                          not logged
-                        </span>
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      {reading ? reading.reading_date : "—"}
-                    </TableCell>
-                  </TableRow>
-                );
-              })}
+              {INDICATOR_KEYS.map((key) => (
+                <TableRow key={key}>
+                  <TableCell className="whitespace-normal">
+                    {INDICATORS[key]}
+                  </TableCell>
+                  <TableCell>
+                    <Input
+                      type="number"
+                      step="any"
+                      value={drafts[key].rawValue}
+                      onChange={(e) =>
+                        updateDraft(key, "rawValue", e.currentTarget.value)
+                      }
+                    />
+                  </TableCell>
+                  <TableCell>
+                    <Input
+                      value={drafts[key].source}
+                      onChange={(e) =>
+                        updateDraft(key, "source", e.currentTarget.value)
+                      }
+                      placeholder="ultrasound.money"
+                    />
+                  </TableCell>
+                </TableRow>
+              ))}
             </TableBody>
           </Table>
-        </div>
+
+          {updateAllMutation.isError && (
+            <p className="text-red-600">{updateAllMutation.error.message}</p>
+          )}
+
+          <Button type="submit" disabled={updateAllMutation.isPending}>
+            {updateAllMutation.isPending ? "Updating..." : "Update all"}
+          </Button>
+        </form>
       </CardContent>
     </Card>
   );
