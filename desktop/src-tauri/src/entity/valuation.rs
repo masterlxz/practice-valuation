@@ -23,6 +23,8 @@ pub struct Model {
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
 pub enum Relation {
+    #[sea_orm(has_many = "super::banks_inputs::Entity")]
+    BanksInputs,
     #[sea_orm(has_many = "super::bazin_inputs::Entity")]
     BazinInputs,
     #[sea_orm(has_many = "super::dcf_inputs::Entity")]
@@ -31,6 +33,12 @@ pub enum Relation {
     GordonInputs,
     #[sea_orm(has_many = "super::graham_inputs::Entity")]
     GrahamInputs,
+}
+
+impl Related<super::banks_inputs::Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::BanksInputs.def()
+    }
 }
 
 impl Related<super::bazin_inputs::Entity> for Entity {

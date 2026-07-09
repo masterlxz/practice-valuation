@@ -2,6 +2,7 @@
 
 pub mod prelude;
 
+pub mod banks_inputs;
 pub mod bazin_inputs;
 pub mod dcf_inputs;
 pub mod gordon_inputs;

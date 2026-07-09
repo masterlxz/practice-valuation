@@ -15,7 +15,8 @@ pub fn run() {
             commands::bazin::calculate_bazin,
             commands::graham::calculate_graham,
             commands::gordon::calculate_gordon,
-            commands::dcf::calculate_dcf
+            commands::dcf::calculate_dcf,
+            commands::banks::calculate_banks
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
