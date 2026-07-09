@@ -2,7 +2,7 @@
 
 > Este arquivo é o centro de controle do projeto. Atualizado a cada sessão de trabalho.
 > Pode ser lido por qualquer instância do Claude Code em qualquer máquina para retomar o contexto.
-> Última atualização: 2026-07-09 (Sessão 4, fim — score cripto dos 9 indicadores fechado ponta a ponta, Fase 3 completa por inteiro. Retomar por "Pendências pra próxima sessão", item 1 — Fase 4, interface de verdade)
+> Última atualização: 2026-07-09 (Sessão 4, fim — score cripto fechado (Fase 3 completa) e Fase 4 iniciada: shadcn/ui + TanStack Table instalados, tela "Saved Valuations" (lista de tickers → detalhe/histórico de cálculos) funcionando ponta a ponta. Retomar por "Pendências pra próxima sessão", item 1)
 
 ---
 
@@ -81,7 +81,7 @@ Fase 0 — Fundamentos & Decisões de Arquitetura   [~] Em andamento (0.1–0.5 
 Fase 1 — Modelo de Dados (schema do banco local)  [~] Em andamento (migrations rodando normalmente a cada modelo, falta só formalizar 1.3 como concluída)
 Fase 2 — Coleta de Dados (ações BR + cripto)      [ ] Não iniciada
 Fase 3 — Motor de Cálculo (preço-teto/valuation)  [x] Completa — 7 modelos de ação + score cripto (9 indicadores), todos ponta a ponta
-Fase 4 — Interface Desktop                        [ ] Não iniciada — próxima frente (rascunho cru dos formulários já existe, falta a interface de verdade)
+Fase 4 — Interface Desktop                        [~] Em andamento (shadcn/ui + TanStack Table instalados, tela de valuations salvos pronta; 7 formulários de cálculo ainda crus)
 Fase 5 — Monitoramento & Alertas                  [ ] Não iniciada
 Fase 6 — Publicação (GitHub público)               [ ] Não iniciada
 ```
@@ -425,9 +425,9 @@ Diferente de ação (1x/ano), aqui é um **score contínuo**: cada indicador vir
 **⚠️ Nota (Sessão 3)**: as telas dos modelos já implementados (Bazin, Graham) são propositalmente cruas — `<input>` HTML puro com classes utilitárias do Tailwind, sem os componentes do shadcn/ui instalados ainda. É rascunho funcional pra provar a fatia vertical (cálculo → banco → tela) de cada modelo, não a interface final. Decisão: terminar a Fase 3 (os 7 modelos + cripto) com esse padrão cru primeiro, e só então entrar na Fase 4 de verdade — instalar shadcn/ui, desenhar a navegação real (lista de ativos, histórico de cálculos salvos) e vestir os formulários de uma vez, em vez de estilizar um por um sem ainda saber todos os inputs que a navegação final vai precisar acomodar.
 
 **Etapas**:
-- [ ] 4.1 — Tela: lista de ativos acompanhados
-- [ ] 4.2 — Tela: detalhe do ativo (premissas + histórico de cálculos salvos)
-- [ ] 4.3 — Tela: cripto/indicadores
+- [x] 4.1 — Tela: lista de ativos acompanhados — **concluída na Sessão 4** como "Saved Valuations": tickers distintos derivados da tabela `valuation` (sem tabela `asset` própria — ver Log de Sessões)
+- [~] 4.2 — Tela: detalhe do ativo (histórico de cálculos salvos) — **parcialmente concluída na Sessão 4**: comparação lado a lado dos campos comuns (model, preço justo, margem, veredito, data) funcionando; falta mostrar as premissas específicas de cada modelo (ex.: qual dividendo médio foi usado no Bazin daquela linha), que exigiria juntar com as 7 tabelas de input
+- [ ] 4.3 — Tela: cripto/indicadores (o painel cru já existe desde a Fase 3.3, falta vestir com shadcn/ui)
 - [ ] 4.4 — Tela: alertas/zona de compra
 - [x] 4.5 — Direção visual → **arejado, tipo dashboard** (Tailwind + shadcn/ui + TanStack Table), decidido na Sessão 1
 
@@ -576,8 +576,18 @@ Diferente de ação (1x/ano), aqui é um **score contínuo**: cada indicador vir
 - Usuário perguntou se a interface atual era o design final — confirmado que não, é rascunho cru de propósito (mesma nota da Fase 4 desde a Sessão 3); com o score cripto fechado, a Fase 3 está **completa por inteiro** (7 modelos + cripto), então a Fase 4 (interface de verdade — shadcn/ui, navegação real, lista de ativos, telas de análise) é a próxima frente natural
 - **Marco**: Fase 3 marcada como completa no "Status Geral" — não sobra nenhum modelo/indicador de valuation pendente de implementar antes da Fase 4
 
+- **Continuação da Sessão 4 (início da Fase 4 — pergunta do usuário puxou o assunto)**: usuário perguntou se dava pra ver os valuations já salvos e confirmou (consultando o `.db` direto, `sqlite3 data-collector/practice_valuation.db "SELECT ... FROM valuation"`) que sim — cada cálculo já é uma linha nova, nada sobrescreve, exatamente como desenhado desde a Fase 1. Isso puxou a decisão de já começar a Fase 4 (interface de verdade) nesta mesma sessão, em vez de esperar a próxima — **planejada com `/plan` antes de implementar** pelo tamanho da mudança (primeira tela "de verdade" do projeto). Duas decisões levadas ao usuário antes de codar:
+  - **Navegação lista → detalhe: estado na mão** (`useState`), sem `react-router` — mesmo padrão do alternador de seções, sem necessidade real de URL num app desktop pessoal
+  - **Escopo: só as telas novas** — os 7 formulários de cálculo e o painel cripto continuam crus por enquanto; "vestir os formulários de uma vez" (nota da Sessão 3) fica pra uma sessão futura
+- **Decisão de engenharia (sem perguntar — não é gosto, é YAGNI)**: não criei a tabela `asset` que a Fase 1 original previa (ticker/tipo/nome cadastrados à parte). A lista de "ativos acompanhados" é derivada dos tickers distintos que já aparecem em `valuation` — resolve o que foi pedido (ver/comparar cálculos já salvos) sem precisar de uma tela de cadastro nova. Uma tabela `asset` registrável faria sentido se um dia o usuário quiser um ticker na lista **antes** de calcular algo pra ele (watchlist) — registrado no Roadmap, não implementado agora
+- **shadcn/ui e TanStack Table instalados de verdade pela primeira vez** (decididos na Sessão 1, Fase 0.4, nunca usados até aqui): `npx shadcn@latest init -t vite --base radix -p nova` (precisou primeiro configurar o alias de import `@/*` em `tsconfig.json` + `vite.config.ts`, que o init exige e o projeto ainda não tinha) + componentes `table`, `button`, `badge`, `card`; `@tanstack/react-table` via `npm install`
+- **`src/commands/valuation.rs`** (novo, `list_valuations` — só leitura, sem lógica de domínio, não entra em `domain/`) + **`src/valuations/SavedValuationsPanel.tsx`**: tela de lista (tickers agrupados no client — `count`, modelo/veredito/data do cálculo mais recente, aproveitando que `list_valuations` já ordena por `updated_at` desc no backend) e tela de detalhe (todas as linhas daquele ticker, comparação lado a lado — a Fase 3.4 pedida desde a Sessão 3). Tabelas renderizadas com `@tanstack/react-table` (`useReactTable`/`getCoreRowModel`, sem sort/filtro nesta primeira leva) + `Table`/`Badge`/`Card`/`Button` do shadcn. `App.tsx` ganhou a 3ª seção ("Saved Valuations"), com container mais largo (`max-w-4xl`) só quando essa seção está ativa
+- **Simplificação assumida**: a tela de detalhe mostra só os campos comuns da `valuation` (preço justo, margem, veredito, data) — não busca as premissas específicas de cada modelo (ex.: qual dividendo médio foi usado naquele Bazin), que exigiria juntar com as 7 tabelas de input conforme o `model` da linha. Registrado como 4.2 parcial, não 4.2 completa
+- `cargo check`, `cargo test --lib` (32 testes, nada quebrou) e `npx tsc --noEmit` limpos. Smoke test real rodado (`docker compose up`) — **usuário confirmou visualmente que a lista mostra o BBAS3/Bazin salvo e que o drill-down pro detalhe funciona** ("mt massa deu boa")
+- **Marco**: Fase 4.1 concluída, Fase 4.2 parcialmente concluída (falta só o detalhe fino das premissas por modelo) — primeira tela do projeto com visual de verdade (shadcn/ui), não mais rascunho cru
+
 **Pendências pra próxima sessão** (em ordem):
-1. **Fase 4 (Interface Desktop)** — próxima frente de trabalho agora que a Fase 3 está completa por inteiro (7 modelos + score cripto). Começar por 4.1 (lista de ativos acompanhados) e 4.2 (tela de detalhe/análise por ativo, histórico de cálculos salvos lado a lado), instalando shadcn/ui antes de desenhar a navegação real
+1. **Fase 4, continuação**: 4.2 fino (mostrar as premissas específicas de cada modelo na tela de detalhe, juntando com as 7 tabelas de input) e/ou 4.3 (vestir o painel cripto cru com shadcn/ui) e/ou "vestir os 7 formulários de cálculo de uma vez" (nota da Sessão 3, ainda não feita)
 2. Corrigir a mensagem genérica de `AppError::InvalidGuard` (achado da Sessão 4 — hoje toda guarda dos 7 modelos mostra a mesma frase do Bazin na UI, independente de qual guarda disparou)
 3. README.md e LICENSE na raiz do repo ainda não existem (Fase 0.5/6.2/6.3)
 4. Quando o usuário voltar a mexer no TruthID mobile, lembrar que o cache Docker foi limpo (Sessão 1 do Practice Valuation) — primeiro `docker compose up` de lá vai ser mais lento

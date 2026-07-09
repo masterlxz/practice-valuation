@@ -7,6 +7,7 @@ import BanksForm from "./models/BanksForm";
 import RnavForm from "./models/RnavForm";
 import ProjectedCeilingForm from "./models/ProjectedCeilingForm";
 import CryptoScorePanel from "./crypto/CryptoScorePanel";
+import SavedValuationsPanel from "./valuations/SavedValuationsPanel";
 
 const MODELS = {
   bazin: { label: "Bazin", component: BazinForm },
@@ -26,6 +27,7 @@ type ModelKey = keyof typeof MODELS;
 const SECTIONS = {
   valuation: "Valuation",
   crypto: "Crypto Score",
+  saved: "Saved Valuations",
 } as const;
 
 type SectionKey = keyof typeof SECTIONS;
@@ -36,7 +38,9 @@ function App() {
   const SelectedForm = MODELS[selectedModel].component;
 
   return (
-    <main className="mx-auto max-w-md p-8">
+    <main
+      className={`mx-auto p-8 ${section === "saved" ? "max-w-4xl" : "max-w-md"}`}
+    >
       <div className="mb-6 flex gap-2">
         {Object.entries(SECTIONS).map(([key, label]) => (
           <button
@@ -78,6 +82,7 @@ function App() {
       )}
 
       {section === "crypto" && <CryptoScorePanel />}
+      {section === "saved" && <SavedValuationsPanel />}
     </main>
   );
 }
