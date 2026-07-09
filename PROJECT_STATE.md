@@ -2,7 +2,7 @@
 
 > Este arquivo é o centro de controle do projeto. Atualizado a cada sessão de trabalho.
 > Pode ser lido por qualquer instância do Claude Code em qualquer máquina para retomar o contexto.
-> Última atualização: 2026-07-08 (Sessão 1, continuação — arquivo consolidado: as duas specs de `docs/` foram incorporadas nas Fases 2 e 3, e removidas. Este é o único arquivo de planejamento do projeto agora)
+> Última atualização: 2026-07-08 (Sessão 1, fim — primeira migration (`valuation` + `bazin_inputs`) escrita e compilando; ainda não rodada. Retomar por "Pendências pra próxima sessão", item 1)
 
 ---
 
@@ -525,13 +525,18 @@ Diferente de ação (1x/ano), aqui é um **score contínuo**: cada indicador vir
 - **Continuação da Sessão 1 (sea-orm-cli instalado)**: `sea-orm` adicionado ao `Cargo.toml` (`sqlx-sqlite`, `runtime-tokio-rustls`, `macros` — versão 1.1.20 confirmada contra o registro real, `cargo check` passou). `sea-orm-cli` (ferramenta de dev, não dependência do projeto) instalado direto no Dockerfile — reconstruído e confirmado (`sea-orm-cli 1.1.20`, mesma versão da lib)
 - **Continuação da Sessão 1 (reconsideração de framework — Tauri vs Electron vs Python puro)**: usuário questionou se Tauri era mesmo a melhor escolha, dado o atrito de aprender Rust. Explicado que o Tauri exige Rust por natureza (não tem como usar sem escrever Rust); as alternativas reais seriam Electron (mesmo frontend React/TS, mas backend em Node/TS — sem Rust) ou um app 100% Python (PySide6/Flet, reaproveitando SQLAlchemy). Decisão: **manter Tauri + Rust** — o app já funciona, o SeaORM já resolveu o maior atrito (ORM familiar), e o ritmo do projeto é lento de propósito, então o custo de aprender Rust aos poucos é aceitável
 - **Continuação da Sessão 1 (revisão do schema de valuation)**: ver "Mudança de abordagem #2" na Fase 1 — schema reformulado de "7 tabelas auto-contidas" pra "`valuation` compartilhada + tabela de inputs por modelo", por pedido do usuário pensando em manutenção de longo prazo
+- **Continuação da Sessão 1 (início da fatia vertical do Bazin)**: criada a pasta `migration/` (`sea-orm-cli migrate init`), ajustada pra usar `tokio` em vez de `async-std` (consistência com o resto do projeto). Escrita a primeira migration de verdade (`create_valuation_and_bazin_inputs`): cria `valuation` (campos comuns, nullable onde a guarda pode impedir o cálculo) + `bazin_inputs` (dividendo médio, yield desejado) com FK cascata de volta pra `valuation`. **`cargo check` passou de primeira** — os helpers do schema builder (`pk_auto`, `string`, `integer`, `double`, `*_null`, `foreign_key`) usados corretamente. Nota técnica: arquivos criados pelo `sea-orm-cli` de dentro do container nascem com dono `root` — precisa de `chown -R 1000:1000` depois de cada geração (`migrate init`, `migrate generate`, e futuramente `generate entity`) antes de editar pelo host
+- Usuário questionou se Tauri era mesmo a melhor escolha framework-wise — ver entrada acima (reconsideração Tauri vs Electron vs Python), decisão foi manter
+- Sessão encerrada aqui a pedido do usuário — clima bom, sessão longa e produtiva. Migration escrita e validada, mas **ainda não rodada** (o arquivo `.db` ainda não existe fisicamente)
 
 **Pendências pra próxima sessão** (em ordem):
-1. Fatia vertical: implementar só o modelo **Bazin** ponta a ponta (`valuation` + `bazin_inputs` + migration SeaORM + entity gerada + `domain/` com a função de cálculo + `commands/` fino + erro via `thiserror` + tela simples usando TanStack Query), antes de replicar pros outros 6. Próximo passo concreto: `sea-orm-cli migrate init` (criar a pasta de migration)
-2. Depois da fatia vertical validada, replicar o padrão pros outros 6 modelos + `cripto_indicadores` (Fase 3.2)
-3. README.md e LICENSE na raiz do repo ainda não existem (Fase 0.5/6.2/6.3)
-4. Quando o usuário voltar a mexer no TruthID mobile, lembrar que o cache Docker foi limpo (Sessão 1 do Practice Valuation) — primeiro `docker compose up` de lá vai ser mais lento
-5. Se algum dia migrar a imagem Docker (Node/Debian), lembrar dos 3 fixes de rede/instalação da Sessão 1 (IPv6, npm audit, node_modules corrompido) — não são óbvios
+1. Rodar a migration de verdade: `sea-orm-cli migrate up` (cria `data-collector/practice_valuation.db` com as tabelas `valuation`/`bazin_inputs` pela primeira vez) — lembrar do `chown` depois
+2. Gerar a entity a partir do banco migrado: `sea-orm-cli generate entity` (aponta pro output dentro de `src/entity/`, não como crate separado — ver "Arquitetura de Código")
+3. Escrever a função de cálculo do Bazin em `domain/` (pura) + o comando Tauri fino em `commands/` (erro via `thiserror`) + uma tela simples no React usando TanStack Query pra fechar a fatia vertical ponta a ponta
+4. Depois da fatia vertical validada, replicar o padrão pros outros 6 modelos + `cripto_indicadores` (Fase 3.2)
+5. README.md e LICENSE na raiz do repo ainda não existem (Fase 0.5/6.2/6.3)
+6. Quando o usuário voltar a mexer no TruthID mobile, lembrar que o cache Docker foi limpo (Sessão 1 do Practice Valuation) — primeiro `docker compose up` de lá vai ser mais lento
+7. Se algum dia migrar a imagem Docker (Node/Debian), lembrar dos 3 fixes de rede/instalação da Sessão 1 (IPv6, npm audit, node_modules corrompido) — não são óbvios
 
 ---
 
