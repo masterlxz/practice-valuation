@@ -8,6 +8,15 @@ import RnavForm from "./models/RnavForm";
 import ProjectedCeilingForm from "./models/ProjectedCeilingForm";
 import CryptoScorePanel from "./crypto/CryptoScorePanel";
 import SavedValuationsPanel from "./valuations/SavedValuationsPanel";
+import Field from "./components/Field";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 const MODELS = {
   bazin: { label: "Bazin", component: BazinForm },
@@ -41,48 +50,48 @@ function App() {
     <main
       className={`mx-auto p-8 ${section === "saved" ? "max-w-4xl" : "max-w-md"}`}
     >
-      <div className="mb-6 flex gap-2">
-        {Object.entries(SECTIONS).map(([key, label]) => (
-          <button
-            key={key}
-            type="button"
-            onClick={() => setSection(key as SectionKey)}
-            className={`rounded px-3 py-2 ${
-              section === key
-                ? "bg-black text-white"
-                : "border text-gray-700"
-            }`}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
+      <Tabs
+        value={section}
+        onValueChange={(value) => setSection(value as SectionKey)}
+      >
+        <TabsList className="mb-6">
+          {Object.entries(SECTIONS).map(([key, label]) => (
+            <TabsTrigger key={key} value={key}>
+              {label}
+            </TabsTrigger>
+          ))}
+        </TabsList>
 
-      {section === "valuation" && (
-        <>
-          <label className="mb-6 flex flex-col gap-1">
-            Valuation model
-            <select
+        <TabsContent value="valuation" className="flex flex-col gap-6">
+          <Field label="Valuation model">
+            <Select
               value={selectedModel}
-              onChange={(e) =>
-                setSelectedModel(e.currentTarget.value as ModelKey)
-              }
-              className="rounded border px-3 py-2"
+              onValueChange={(value) => setSelectedModel(value as ModelKey)}
             >
-              {Object.entries(MODELS).map(([key, { label }]) => (
-                <option key={key} value={key}>
-                  {label}
-                </option>
-              ))}
-            </select>
-          </label>
+              <SelectTrigger className="w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {Object.entries(MODELS).map(([key, { label }]) => (
+                  <SelectItem key={key} value={key}>
+                    {label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </Field>
 
           <SelectedForm />
-        </>
-      )}
+        </TabsContent>
 
-      {section === "crypto" && <CryptoScorePanel />}
-      {section === "saved" && <SavedValuationsPanel />}
+        <TabsContent value="crypto">
+          <CryptoScorePanel />
+        </TabsContent>
+
+        <TabsContent value="saved">
+          <SavedValuationsPanel />
+        </TabsContent>
+      </Tabs>
     </main>
   );
 }

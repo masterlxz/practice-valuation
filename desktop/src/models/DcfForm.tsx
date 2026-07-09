@@ -3,6 +3,10 @@ import { invoke } from "@tauri-apps/api/core";
 import { useMutation } from "@tanstack/react-query";
 import type { AppError, ValuationModel } from "../types";
 import ValuationResult from "../components/ValuationResult";
+import Field from "../components/Field";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 type CalculateDcfRequest = {
   ticker: string;
@@ -46,8 +50,13 @@ type DcfValuationResponse = {
   inputs: DcfInputsModel;
 };
 
-const fieldClass = "rounded border px-3 py-2";
-const labelClass = "flex flex-col gap-1";
+function SectionHeading({ children }: { children: string }) {
+  return (
+    <h2 className="mt-2 text-sm font-semibold text-muted-foreground">
+      {children}
+    </h2>
+  );
+}
 
 function DcfForm() {
   const [ticker, setTicker] = useState("");
@@ -101,226 +110,189 @@ function DcfForm() {
   }
 
   return (
-    <>
-      <h1 className="mb-6 text-2xl font-semibold">Fair Price (DCF / FCFF)</h1>
+    <Card>
+      <CardHeader>
+        <CardTitle>Fair Price (DCF / FCFF)</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+          <Field label="Ticker">
+            <Input
+              required
+              value={ticker}
+              onChange={(e) => setTicker(e.currentTarget.value)}
+              placeholder="ITSA4"
+            />
+          </Field>
 
-      <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-        <label className={labelClass}>
-          Ticker
-          <input
-            required
-            value={ticker}
-            onChange={(e) => setTicker(e.currentTarget.value)}
-            placeholder="ITSA4"
-            className={fieldClass}
-          />
-        </label>
+          <Field label="Reference year">
+            <Input
+              required
+              type="number"
+              value={referenceYear}
+              onChange={(e) => setReferenceYear(e.currentTarget.value)}
+            />
+          </Field>
 
-        <label className={labelClass}>
-          Reference year
-          <input
-            required
-            type="number"
-            value={referenceYear}
-            onChange={(e) => setReferenceYear(e.currentTarget.value)}
-            className={fieldClass}
-          />
-        </label>
+          <Field label="Current price (R$)">
+            <Input
+              required
+              type="number"
+              step="0.01"
+              value={currentPrice}
+              onChange={(e) => setCurrentPrice(e.currentTarget.value)}
+            />
+          </Field>
 
-        <label className={labelClass}>
-          Current price (R$)
-          <input
-            required
-            type="number"
-            step="0.01"
-            value={currentPrice}
-            onChange={(e) => setCurrentPrice(e.currentTarget.value)}
-            className={fieldClass}
-          />
-        </label>
+          <SectionHeading>Operational</SectionHeading>
 
-        <h2 className="mt-2 text-sm font-semibold text-gray-500">Operational</h2>
+          <Field label="EBIT (R$ millions)">
+            <Input
+              required
+              type="number"
+              step="0.01"
+              value={ebit}
+              onChange={(e) => setEbit(e.currentTarget.value)}
+            />
+          </Field>
 
-        <label className={labelClass}>
-          EBIT (R$ millions)
-          <input
-            required
-            type="number"
-            step="0.01"
-            value={ebit}
-            onChange={(e) => setEbit(e.currentTarget.value)}
-            className={fieldClass}
-          />
-        </label>
+          <Field label="Effective tax rate (%)">
+            <Input
+              required
+              type="number"
+              step="0.1"
+              value={taxRate}
+              onChange={(e) => setTaxRate(e.currentTarget.value)}
+            />
+          </Field>
 
-        <label className={labelClass}>
-          Effective tax rate (%)
-          <input
-            required
-            type="number"
-            step="0.1"
-            value={taxRate}
-            onChange={(e) => setTaxRate(e.currentTarget.value)}
-            className={fieldClass}
-          />
-        </label>
+          <Field label="D&A — depreciation/amortization (R$ millions)">
+            <Input
+              required
+              type="number"
+              step="0.01"
+              value={depreciationAmortization}
+              onChange={(e) => setDepreciationAmortization(e.currentTarget.value)}
+            />
+          </Field>
 
-        <label className={labelClass}>
-          D&amp;A — depreciation/amortization (R$ millions)
-          <input
-            required
-            type="number"
-            step="0.01"
-            value={depreciationAmortization}
-            onChange={(e) => setDepreciationAmortization(e.currentTarget.value)}
-            className={fieldClass}
-          />
-        </label>
+          <Field label="Capex (R$ millions)">
+            <Input
+              required
+              type="number"
+              step="0.01"
+              value={capex}
+              onChange={(e) => setCapex(e.currentTarget.value)}
+            />
+          </Field>
 
-        <label className={labelClass}>
-          Capex (R$ millions)
-          <input
-            required
-            type="number"
-            step="0.01"
-            value={capex}
-            onChange={(e) => setCapex(e.currentTarget.value)}
-            className={fieldClass}
-          />
-        </label>
+          <Field label="ΔNWC — change in net working capital (R$ millions)">
+            <Input
+              required
+              type="number"
+              step="0.01"
+              value={nwcChange}
+              onChange={(e) => setNwcChange(e.currentTarget.value)}
+            />
+          </Field>
 
-        <label className={labelClass}>
-          ΔNWC — change in net working capital (R$ millions)
-          <input
-            required
-            type="number"
-            step="0.01"
-            value={nwcChange}
-            onChange={(e) => setNwcChange(e.currentTarget.value)}
-            className={fieldClass}
-          />
-        </label>
+          <SectionHeading>Capital structure</SectionHeading>
 
-        <h2 className="mt-2 text-sm font-semibold text-gray-500">
-          Capital structure
-        </h2>
+          <Field label="Total debt (R$ millions)">
+            <Input
+              required
+              type="number"
+              step="0.01"
+              value={totalDebt}
+              onChange={(e) => setTotalDebt(e.currentTarget.value)}
+            />
+          </Field>
 
-        <label className={labelClass}>
-          Total debt (R$ millions)
-          <input
-            required
-            type="number"
-            step="0.01"
-            value={totalDebt}
-            onChange={(e) => setTotalDebt(e.currentTarget.value)}
-            className={fieldClass}
-          />
-        </label>
+          <Field label="Cash (R$ millions)">
+            <Input
+              required
+              type="number"
+              step="0.01"
+              value={cash}
+              onChange={(e) => setCash(e.currentTarget.value)}
+            />
+          </Field>
 
-        <label className={labelClass}>
-          Cash (R$ millions)
-          <input
-            required
-            type="number"
-            step="0.01"
-            value={cash}
-            onChange={(e) => setCash(e.currentTarget.value)}
-            className={fieldClass}
-          />
-        </label>
+          <Field label="Shares outstanding (millions)">
+            <Input
+              required
+              type="number"
+              step="0.01"
+              value={sharesOutstanding}
+              onChange={(e) => setSharesOutstanding(e.currentTarget.value)}
+            />
+          </Field>
 
-        <label className={labelClass}>
-          Shares outstanding (millions)
-          <input
-            required
-            type="number"
-            step="0.01"
-            value={sharesOutstanding}
-            onChange={(e) => setSharesOutstanding(e.currentTarget.value)}
-            className={fieldClass}
-          />
-        </label>
+          <SectionHeading>Cost of capital</SectionHeading>
 
-        <h2 className="mt-2 text-sm font-semibold text-gray-500">
-          Cost of capital
-        </h2>
+          <Field label="Beta">
+            <Input
+              required
+              type="number"
+              step="0.01"
+              value={beta}
+              onChange={(e) => setBeta(e.currentTarget.value)}
+            />
+          </Field>
 
-        <label className={labelClass}>
-          Beta
-          <input
-            required
-            type="number"
-            step="0.01"
-            value={beta}
-            onChange={(e) => setBeta(e.currentTarget.value)}
-            className={fieldClass}
-          />
-        </label>
+          <Field label="Risk-free rate — Rf (%)">
+            <Input
+              required
+              type="number"
+              step="0.1"
+              value={riskFreeRate}
+              onChange={(e) => setRiskFreeRate(e.currentTarget.value)}
+            />
+          </Field>
 
-        <label className={labelClass}>
-          Risk-free rate — Rf (%)
-          <input
-            required
-            type="number"
-            step="0.1"
-            value={riskFreeRate}
-            onChange={(e) => setRiskFreeRate(e.currentTarget.value)}
-            className={fieldClass}
-          />
-        </label>
+          <Field label="Market risk premium (%)">
+            <Input
+              required
+              type="number"
+              step="0.1"
+              value={marketRiskPremium}
+              onChange={(e) => setMarketRiskPremium(e.currentTarget.value)}
+            />
+          </Field>
 
-        <label className={labelClass}>
-          Market risk premium (%)
-          <input
-            required
-            type="number"
-            step="0.1"
-            value={marketRiskPremium}
-            onChange={(e) => setMarketRiskPremium(e.currentTarget.value)}
-            className={fieldClass}
-          />
-        </label>
+          <Field label="Cost of debt — Kd (%)">
+            <Input
+              required
+              type="number"
+              step="0.1"
+              value={kd}
+              onChange={(e) => setKd(e.currentTarget.value)}
+            />
+          </Field>
 
-        <label className={labelClass}>
-          Cost of debt — Kd (%)
-          <input
-            required
-            type="number"
-            step="0.1"
-            value={kd}
-            onChange={(e) => setKd(e.currentTarget.value)}
-            className={fieldClass}
-          />
-        </label>
+          <Field label="Perpetuity growth — g (%)">
+            <Input
+              required
+              type="number"
+              step="0.1"
+              value={perpetuityGrowth}
+              onChange={(e) => setPerpetuityGrowth(e.currentTarget.value)}
+            />
+          </Field>
 
-        <label className={labelClass}>
-          Perpetuity growth — g (%)
-          <input
-            required
-            type="number"
-            step="0.1"
-            value={perpetuityGrowth}
-            onChange={(e) => setPerpetuityGrowth(e.currentTarget.value)}
-            className={fieldClass}
-          />
-        </label>
+          <Button type="submit" disabled={mutation.isPending}>
+            {mutation.isPending ? "Calculating..." : "Calculate"}
+          </Button>
+        </form>
 
-        <button
-          type="submit"
-          disabled={mutation.isPending}
-          className="rounded bg-black px-4 py-2 text-white disabled:opacity-50"
-        >
-          {mutation.isPending ? "Calculating..." : "Calculate"}
-        </button>
-      </form>
-
-      <ValuationResult
-        isError={mutation.isError}
-        error={mutation.error ?? null}
-        isSuccess={mutation.isSuccess}
-        valuation={mutation.data?.valuation ?? null}
-      />
-    </>
+        <ValuationResult
+          isError={mutation.isError}
+          error={mutation.error ?? null}
+          isSuccess={mutation.isSuccess}
+          valuation={mutation.data?.valuation ?? null}
+        />
+      </CardContent>
+    </Card>
   );
 }
 

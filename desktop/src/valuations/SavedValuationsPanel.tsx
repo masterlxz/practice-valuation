@@ -9,7 +9,7 @@ import {
 } from "@tanstack/react-table";
 import type { AppError, ValuationModel } from "../types";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
+import VerdictBadge from "../components/VerdictBadge";
 import {
   Card,
   CardContent,
@@ -64,22 +64,6 @@ function summarizeByTicker(valuations: ValuationModel[]): TickerSummary[] {
     }
   }
   return [...summaries.values()];
-}
-
-function VerdictBadge({ verdict }: { verdict: string | null }) {
-  if (!verdict) return <span className="text-muted-foreground">—</span>;
-
-  return (
-    <Badge
-      className={
-        verdict === "BARATO"
-          ? "bg-green-100 text-green-800 dark:bg-green-950 dark:text-green-300"
-          : "bg-red-100 text-red-800 dark:bg-red-950 dark:text-red-300"
-      }
-    >
-      {verdict}
-    </Badge>
-  );
 }
 
 function DataTable<T>({
