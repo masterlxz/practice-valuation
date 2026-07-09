@@ -1,16 +1,17 @@
+mod commands;
+mod db;
+mod domain;
 mod entity;
-
-// Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
-#[tauri::command]
-fn greet(name: &str) -> String {
-    format!("Hello, {}! You've been greeted from Rust!", name)
-}
+mod error;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    let db = tauri::async_runtime::block_on(db::connect()).expect("failed to connect to database");
+
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
-        .invoke_handler(tauri::generate_handler![greet])
+        .manage(db)
+        .invoke_handler(tauri::generate_handler![commands::bazin::calculate_bazin])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

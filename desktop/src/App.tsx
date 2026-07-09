@@ -1,49 +1,165 @@
-import { useState } from "react";
-import reactLogo from "./assets/react.svg";
+import { useState, type FormEvent } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import "./App.css";
+import { useMutation } from "@tanstack/react-query";
+
+type CalculateBazinRequest = {
+  ticker: string;
+  reference_year: number;
+  current_price: number;
+  average_dividend: number;
+  desired_yield: number;
+};
+
+type ValuationModel = {
+  id: number;
+  ticker: string;
+  reference_year: number;
+  current_price: number;
+  model: string;
+  fair_price: number | null;
+  safety_margin: number | null;
+  verdict: string | null;
+  updated_at: string;
+};
+
+type BazinInputsModel = {
+  id: number;
+  valuation_id: number;
+  average_dividend: number;
+  desired_yield: number;
+};
+
+type BazinValuationResponse = {
+  valuation: ValuationModel;
+  inputs: BazinInputsModel;
+};
+
+type AppError = {
+  code: string;
+  message: string;
+};
 
 function App() {
-  const [greetMsg, setGreetMsg] = useState("");
-  const [name, setName] = useState("");
+  const [ticker, setTicker] = useState("");
+  const [referenceYear, setReferenceYear] = useState(
+    String(new Date().getFullYear()),
+  );
+  const [currentPrice, setCurrentPrice] = useState("");
+  const [averageDividend, setAverageDividend] = useState("");
+  const [desiredYield, setDesiredYield] = useState("6");
 
-  async function greet() {
-    // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
-    setGreetMsg(await invoke("greet", { name }));
+  const mutation = useMutation<
+    BazinValuationResponse,
+    AppError,
+    CalculateBazinRequest
+  >({
+    mutationFn: (request) => invoke("calculate_bazin", { request }),
+  });
+
+  function handleSubmit(event: FormEvent) {
+    event.preventDefault();
+    mutation.mutate({
+      ticker: ticker.toUpperCase(),
+      reference_year: Number(referenceYear),
+      current_price: Number(currentPrice),
+      average_dividend: Number(averageDividend),
+      desired_yield: Number(desiredYield) / 100,
+    });
   }
 
   return (
-    <main className="container">
-      <h1>Welcome to Tauri + React</h1>
+    <main className="mx-auto max-w-md p-8">
+      <h1 className="mb-6 text-2xl font-semibold">Preço-Teto (Bazin)</h1>
 
-      <div className="row">
-        <a href="https://vite.dev" target="_blank">
-          <img src="/vite.svg" className="logo vite" alt="Vite logo" />
-        </a>
-        <a href="https://tauri.app" target="_blank">
-          <img src="/tauri.svg" className="logo tauri" alt="Tauri logo" />
-        </a>
-        <a href="https://react.dev" target="_blank">
-          <img src={reactLogo} className="logo react" alt="React logo" />
-        </a>
-      </div>
-      <p>Click on the Tauri, Vite, and React logos to learn more.</p>
+      <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+        <label className="flex flex-col gap-1">
+          Ticker
+          <input
+            required
+            value={ticker}
+            onChange={(e) => setTicker(e.currentTarget.value)}
+            placeholder="ITSA4"
+            className="rounded border px-3 py-2"
+          />
+        </label>
 
-      <form
-        className="row"
-        onSubmit={(e) => {
-          e.preventDefault();
-          greet();
-        }}
-      >
-        <input
-          id="greet-input"
-          onChange={(e) => setName(e.currentTarget.value)}
-          placeholder="Enter a name..."
-        />
-        <button type="submit">Greet</button>
+        <label className="flex flex-col gap-1">
+          Ano de referência
+          <input
+            required
+            type="number"
+            value={referenceYear}
+            onChange={(e) => setReferenceYear(e.currentTarget.value)}
+            className="rounded border px-3 py-2"
+          />
+        </label>
+
+        <label className="flex flex-col gap-1">
+          Preço atual (R$)
+          <input
+            required
+            type="number"
+            step="0.01"
+            value={currentPrice}
+            onChange={(e) => setCurrentPrice(e.currentTarget.value)}
+            className="rounded border px-3 py-2"
+          />
+        </label>
+
+        <label className="flex flex-col gap-1">
+          Dividendo médio por ação (R$, últimos 5 anos)
+          <input
+            required
+            type="number"
+            step="0.01"
+            value={averageDividend}
+            onChange={(e) => setAverageDividend(e.currentTarget.value)}
+            className="rounded border px-3 py-2"
+          />
+        </label>
+
+        <label className="flex flex-col gap-1">
+          Yield desejado (%)
+          <input
+            required
+            type="number"
+            step="0.1"
+            value={desiredYield}
+            onChange={(e) => setDesiredYield(e.currentTarget.value)}
+            className="rounded border px-3 py-2"
+          />
+        </label>
+
+        <button
+          type="submit"
+          disabled={mutation.isPending}
+          className="rounded bg-black px-4 py-2 text-white disabled:opacity-50"
+        >
+          {mutation.isPending ? "Calculando..." : "Calcular"}
+        </button>
       </form>
-      <p>{greetMsg}</p>
+
+      {mutation.isError && (
+        <p className="mt-6 text-red-600">{mutation.error.message}</p>
+      )}
+
+      {mutation.isSuccess && (
+        <div className="mt-6 rounded border p-4">
+          <p>
+            Preço-teto:{" "}
+            <strong>R$ {mutation.data.valuation.fair_price?.toFixed(2)}</strong>
+          </p>
+          <p>
+            Margem de segurança:{" "}
+            <strong>
+              {((mutation.data.valuation.safety_margin ?? 0) * 100).toFixed(1)}%
+            </strong>
+          </p>
+          <p>
+            Veredito: <strong>{mutation.data.valuation.verdict}</strong>
+          </p>
+        </div>
+      )}
     </main>
   );
 }
