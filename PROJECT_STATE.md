@@ -422,6 +422,8 @@ Diferente de ação (1x/ano), aqui é um **score contínuo**: cada indicador vir
 
 **Objetivo**: telas simples, "planilha-like", que dão espaço pra edição manual quando preciso.
 
+**⚠️ Nota (Sessão 3)**: as telas dos modelos já implementados (Bazin, Graham) são propositalmente cruas — `<input>` HTML puro com classes utilitárias do Tailwind, sem os componentes do shadcn/ui instalados ainda. É rascunho funcional pra provar a fatia vertical (cálculo → banco → tela) de cada modelo, não a interface final. Decisão: terminar a Fase 3 (os 7 modelos + cripto) com esse padrão cru primeiro, e só então entrar na Fase 4 de verdade — instalar shadcn/ui, desenhar a navegação real (lista de ativos, histórico de cálculos salvos) e vestir os formulários de uma vez, em vez de estilizar um por um sem ainda saber todos os inputs que a navegação final vai precisar acomodar.
+
 **Etapas**:
 - [ ] 4.1 — Tela: lista de ativos acompanhados
 - [ ] 4.2 — Tela: detalhe do ativo (premissas + histórico de cálculos salvos)
