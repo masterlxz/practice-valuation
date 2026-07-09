@@ -11,7 +11,10 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .manage(db)
-        .invoke_handler(tauri::generate_handler![commands::bazin::calculate_bazin])
+        .invoke_handler(tauri::generate_handler![
+            commands::bazin::calculate_bazin,
+            commands::graham::calculate_graham
+        ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

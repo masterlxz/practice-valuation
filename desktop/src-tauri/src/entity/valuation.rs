@@ -25,11 +25,19 @@ pub struct Model {
 pub enum Relation {
     #[sea_orm(has_many = "super::bazin_inputs::Entity")]
     BazinInputs,
+    #[sea_orm(has_many = "super::graham_inputs::Entity")]
+    GrahamInputs,
 }
 
 impl Related<super::bazin_inputs::Entity> for Entity {
     fn to() -> RelationDef {
         Relation::BazinInputs.def()
+    }
+}
+
+impl Related<super::graham_inputs::Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::GrahamInputs.def()
     }
 }
 

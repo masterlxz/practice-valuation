@@ -470,6 +470,7 @@ Diferente de ação (1x/ano), aqui é um **score contínuo**: cada indicador vir
 | Biblioteca de tabela/grid | AG Grid Community vs Glide Data Grid vs TanStack Table + shadcn/ui | **TanStack Table + shadcn/ui** ✓ — decidido na Sessão 1. Motivo: headless, visual 100% customizável e consistente com o resto do app (mesma base do shadcn/ui), em troca de implementar edição/filtro na mão em vez de ganhar pronto |
 | Sistema de componentes | shadcn/ui vs Mantine vs Ant Design | **shadcn/ui** (Radix + Tailwind) ✓ — decidido na Sessão 1. Componentes copiados pro repo, visual moderno/neutro, fácil de customizar |
 | Biblioteca de gráfico | Recharts vs lightweight-charts (TradingView) vs outra | Pendente — avaliar na Fase 4.3 |
+| Navegação entre os 7 modelos de valuation | Seletor de modelo numa tela só vs rota própria por modelo (react-router) | **Seletor numa tela só** ✓ — decidido na Sessão 3. Dropdown troca o formulário exibido, sem roteador; mais rápido de replicar a cada novo modelo, revisitar se a navegação ficar densa demais |
 | Gatilho da coleta de dados | Botão manual vs cron/scheduler periódico | **Botão manual** ✓ — decidido na Sessão 1. Rust dispara o Python como subprocesso, sem periodicidade automática por enquanto |
 | Ambiente de desenvolvimento | Instalar tudo no host vs Docker | **Docker** ✓ — decidido na Sessão 1, mesmo padrão do TruthID (container único com Node+Rust+WebKitGTK+Python), sem precisar instalar nada na máquina |
 
@@ -534,12 +535,25 @@ Diferente de ação (1x/ano), aqui é um **score contínuo**: cada indicador vir
 - **Sessão 2 (correção — diretriz de inglês)**: o formulário e a mensagem de `AppError::InvalidGuard` foram escritos em português por engano — a "Diretriz de código" no topo deste arquivo exige inglês em qualquer string visível ao usuário. Corrigido num commit separado logo em seguida
 - **Sessão 2 (smoke test real)**: `docker compose up` (mesmo fluxo do `dev.sh`) rodado em background, build do zero (~20s de compilação Rust incremental sobre o cache já quente), janela do Tauri abriu e o usuário confirmou visualmente o formulário calculando corretamente. Avisos de Mesa/GL (`Failed to query drm device`, `libGL error: failed to load driver: iris`) aparecem no log mas não impedem o app de abrir — o `WEBKIT_DISABLE_DMABUF_RENDERER`/`WEBKIT_DISABLE_COMPOSITING_MODE` do `docker-compose.yml` (Sessão 1) já cobre isso. Container parado e removido (`docker compose down`) ao final, ownership dos artefatos gerados corrigida
 
+### 2026-07-09 — Sessão 3
+
+- **Navegação dos 7 modelos (pendência #2 da Sessão 2)**: decidido **seletor de modelo numa tela só** (dropdown trocando o formulário exibido), sem roteador (`react-router`) por enquanto — mais rápido de construir e replicar a cada novo modelo; rota própria por modelo fica pra quando/se a navegação ficar densa demais
+- **Fatia vertical do Graham fechada, replicando o padrão do Bazin ponta a ponta**:
+  - Migration `create_graham_inputs` gerada via `sea-orm-cli migrate generate` (mantém o padrão de timestamp automático) e editada à mão — tabela `graham_inputs` (`eps`, `book_value_per_share`) com FK cascata pra `valuation`, mesmo molde da `bazin_inputs`
+  - `migrate up` + `generate entity` rodados — `chown -R 1000:1000` precisou ser feito via `docker compose run ... chown` (o host não tem permissão de tocar arquivo dono de `root` escrito pelo container mesmo sendo o mesmo UID numérico — resolvido chamando o `chown` de dentro do container, que tem esse privilégio)
+  - `src/domain/graham.rs`: função pura `calculate()`, guarda `eps <= 0.0 || book_value_per_share <= 0.0`, fórmula `sqrt(22.5 × eps × book_value_per_share)`, mesmo padrão de veredito Barato/Caro do Bazin (margem de segurança = preço-justo vs preço atual) — 4 testes unitários passando
+  - `src/commands/graham.rs`: comando fino `calculate_graham`, mesmo molde do `calculate_bazin` (persiste `valuation` + `graham_inputs`)
+  - `domain/mod.rs`, `commands/mod.rs`, `lib.rs` atualizados para registrar o novo módulo/comando
+  - `cargo check` e `cargo test --lib domain::graham` passando (4/4)
+- **Refatoração do React pro seletor de modelo**: `App.tsx` virou um shell fino (dropdown + renderiza o form escolhido); lógica de formulário movida pra `src/models/BazinForm.tsx` e `src/models/GrahamForm.tsx`; extraído `src/types.ts` (tipos `ValuationModel`/`AppError` compartilhados, já que agora tem 2+ consumidores) e `src/components/ValuationResult.tsx` (bloco de resultado/erro, idêntico nos dois forms — evita duplicar esse JSX a cada novo modelo)
+- `npx tsc --noEmit` limpo, sem erros de tipo
+- **Smoke test real**: `docker compose up` rodado em background, build terminou (~19s incremental), janela do Tauri abriu com o seletor Bazin/Graham no topo — **usuário confirmou visualmente que os dois modelos calculam corretamente**. Container derrubado (`docker compose down`) ao final, ownership dos artefatos gerados (migration + entities) corrigida antes do commit
+
 **Pendências pra próxima sessão** (em ordem):
-1. Fatia vertical do Bazin está fechada ponta a ponta (cálculo → persistência → UI). Próximo: replicar o mesmo padrão (`*_inputs` table + migration + entity + `domain/` + `commands/` + tela) pros outros 6 modelos (Graham, Gordon/DDM, DCF/FCFF, Bancos P/B-ROE-Gordon, RNAV, Preço Teto Projetivo) + `cripto_indicadores` (Fase 3.2/3.3)
-2. Antes de replicar, vale decidir como as telas dos 7 modelos vão conviver na navegação (uma tela por modelo? seletor de modelo numa tela só?) — ainda não decidido, hoje é só a tela do Bazin sozinha em `App.tsx`
-3. README.md e LICENSE na raiz do repo ainda não existem (Fase 0.5/6.2/6.3)
-4. Quando o usuário voltar a mexer no TruthID mobile, lembrar que o cache Docker foi limpo (Sessão 1 do Practice Valuation) — primeiro `docker compose up` de lá vai ser mais lento
-5. Se algum dia migrar a imagem Docker (Node/Debian), lembrar dos 3 fixes de rede/instalação da Sessão 1 (IPv6, npm audit, node_modules corrompido) — não são óbvios
+1. Replicar o mesmo padrão (`*_inputs` table + migration + entity + `domain/` + `commands/` + form em `src/models/`) pros 5 modelos restantes (Gordon/DDM, DCF/FCFF, Bancos P/B-ROE-Gordon, RNAV, Preço Teto Projetivo) + `cripto_indicadores` (Fase 3.2/3.3) — a navegação (seletor) e a extração de tipos/componente compartilhado já estão prontas pra receber os próximos sem retrabalho
+2. README.md e LICENSE na raiz do repo ainda não existem (Fase 0.5/6.2/6.3)
+3. Quando o usuário voltar a mexer no TruthID mobile, lembrar que o cache Docker foi limpo (Sessão 1 do Practice Valuation) — primeiro `docker compose up` de lá vai ser mais lento
+4. Se algum dia migrar a imagem Docker (Node/Debian), lembrar dos 3 fixes de rede/instalação da Sessão 1 (IPv6, npm audit, node_modules corrompido) — não são óbvios
 
 ---
 
