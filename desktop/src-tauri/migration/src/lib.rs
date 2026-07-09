@@ -2,6 +2,7 @@ pub use sea_orm_migration::prelude::*;
 
 mod m20260709_010051_create_valuation_and_bazin_inputs;
 mod m20260709_152010_create_graham_inputs;
+mod m20260709_153134_create_gordon_inputs;
 
 pub struct Migrator;
 
@@ -11,6 +12,7 @@ impl MigratorTrait for Migrator {
         vec![
             Box::new(m20260709_010051_create_valuation_and_bazin_inputs::Migration),
             Box::new(m20260709_152010_create_graham_inputs::Migration),
+            Box::new(m20260709_153134_create_gordon_inputs::Migration),
         ]
     }
 }

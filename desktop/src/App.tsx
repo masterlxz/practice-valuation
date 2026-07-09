@@ -1,10 +1,12 @@
 import { useState } from "react";
 import BazinForm from "./models/BazinForm";
 import GrahamForm from "./models/GrahamForm";
+import GordonForm from "./models/GordonForm";
 
 const MODELS = {
   bazin: { label: "Bazin", component: BazinForm },
   graham: { label: "Graham", component: GrahamForm },
+  gordon: { label: "Gordon / DDM", component: GordonForm },
 } as const;
 
 type ModelKey = keyof typeof MODELS;

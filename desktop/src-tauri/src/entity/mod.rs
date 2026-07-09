@@ -3,5 +3,6 @@
 pub mod prelude;
 
 pub mod bazin_inputs;
+pub mod gordon_inputs;
 pub mod graham_inputs;
 pub mod valuation;
