@@ -83,38 +83,43 @@
     --sidebar-ring: oklch(0.708 0 0);
 }
 
+/* Practice Valuation brand theme — dark navy + green, same "personality"
+   as TruthID's palette (desktop/src/App.css there) with the accent hue
+   shifted from cyan to green. Applied unconditionally (class="dark" is
+   always set on <html> in index.html) — this isn't a light/dark toggle,
+   it's the app's one look. */
 .dark {
-    --background: oklch(0.145 0 0);
-    --foreground: oklch(0.985 0 0);
-    --card: oklch(0.205 0 0);
-    --card-foreground: oklch(0.985 0 0);
-    --popover: oklch(0.205 0 0);
-    --popover-foreground: oklch(0.985 0 0);
-    --primary: oklch(0.922 0 0);
-    --primary-foreground: oklch(0.205 0 0);
-    --secondary: oklch(0.269 0 0);
-    --secondary-foreground: oklch(0.985 0 0);
-    --muted: oklch(0.269 0 0);
-    --muted-foreground: oklch(0.708 0 0);
-    --accent: oklch(0.269 0 0);
-    --accent-foreground: oklch(0.985 0 0);
-    --destructive: oklch(0.704 0.191 22.216);
-    --border: oklch(1 0 0 / 10%);
-    --input: oklch(1 0 0 / 15%);
-    --ring: oklch(0.556 0 0);
-    --chart-1: oklch(0.87 0 0);
-    --chart-2: oklch(0.556 0 0);
-    --chart-3: oklch(0.439 0 0);
-    --chart-4: oklch(0.371 0 0);
-    --chart-5: oklch(0.269 0 0);
-    --sidebar: oklch(0.205 0 0);
-    --sidebar-foreground: oklch(0.985 0 0);
-    --sidebar-primary: oklch(0.488 0.243 264.376);
-    --sidebar-primary-foreground: oklch(0.985 0 0);
-    --sidebar-accent: oklch(0.269 0 0);
-    --sidebar-accent-foreground: oklch(0.985 0 0);
-    --sidebar-border: oklch(1 0 0 / 10%);
-    --sidebar-ring: oklch(0.556 0 0);
+    --background: #0b0f14;
+    --foreground: #e6edf3;
+    --card: #111820;
+    --card-foreground: #e6edf3;
+    --popover: #111820;
+    --popover-foreground: #e6edf3;
+    --primary: #4ade80;
+    --primary-foreground: #0b0f14;
+    --secondary: #161d26;
+    --secondary-foreground: #e6edf3;
+    --muted: #161d26;
+    --muted-foreground: #9fb1c2;
+    --accent: #1c2530;
+    --accent-foreground: #e6edf3;
+    --destructive: #e25c5c;
+    --border: #1f2630;
+    --input: #1f2630;
+    --ring: #4ade80;
+    --chart-1: #4ade80;
+    --chart-2: #34d399;
+    --chart-3: #22c55e;
+    --chart-4: #16a34a;
+    --chart-5: #166534;
+    --sidebar: #111820;
+    --sidebar-foreground: #e6edf3;
+    --sidebar-primary: #4ade80;
+    --sidebar-primary-foreground: #0b0f14;
+    --sidebar-accent: #1c2530;
+    --sidebar-accent-foreground: #e6edf3;
+    --sidebar-border: #1f2630;
+    --sidebar-ring: #4ade80;
 }
 
 @layer base {

@@ -2,7 +2,7 @@
 
 > Este arquivo é o centro de controle do projeto. Atualizado a cada sessão de trabalho.
 > Pode ser lido por qualquer instância do Claude Code em qualquer máquina para retomar o contexto.
-> Última atualização: 2026-07-09 (Sessão 4, fim — score cripto fechado (Fase 3 completa) e Fase 4 iniciada: shadcn/ui + TanStack Table instalados, tela "Saved Valuations" (lista de tickers → detalhe/histórico de cálculos) funcionando ponta a ponta. Retomar por "Pendências pra próxima sessão", item 1)
+> Última atualização: 2026-07-09 (Sessão 4, fim — score cripto fechado (Fase 3 completa), tela "Saved Valuations" criada, os 7 formulários + painel cripto vestidos com shadcn/ui, e identidade visual definida (dark navy + verde, inspirada no TruthID). Retomar por "Pendências pra próxima sessão", item 1)
 
 ---
 
@@ -81,7 +81,7 @@ Fase 0 — Fundamentos & Decisões de Arquitetura   [~] Em andamento (0.1–0.5 
 Fase 1 — Modelo de Dados (schema do banco local)  [~] Em andamento (migrations rodando normalmente a cada modelo, falta só formalizar 1.3 como concluída)
 Fase 2 — Coleta de Dados (ações BR + cripto)      [ ] Não iniciada
 Fase 3 — Motor de Cálculo (preço-teto/valuation)  [x] Completa — 7 modelos de ação + score cripto (9 indicadores), todos ponta a ponta
-Fase 4 — Interface Desktop                        [~] Em andamento (shadcn/ui + TanStack Table instalados, tela de valuations salvos pronta; 7 formulários de cálculo ainda crus)
+Fase 4 — Interface Desktop                        [~] Em andamento (shadcn/ui + TanStack Table instalados, tela de valuations salvos pronta, 7 formulários + painel cripto vestidos, identidade visual dark+verde definida)
 Fase 5 — Monitoramento & Alertas                  [ ] Não iniciada
 Fase 6 — Publicação (GitHub público)               [ ] Não iniciada
 ```
@@ -427,9 +427,9 @@ Diferente de ação (1x/ano), aqui é um **score contínuo**: cada indicador vir
 **Etapas**:
 - [x] 4.1 — Tela: lista de ativos acompanhados — **concluída na Sessão 4** como "Saved Valuations": tickers distintos derivados da tabela `valuation` (sem tabela `asset` própria — ver Log de Sessões)
 - [~] 4.2 — Tela: detalhe do ativo (histórico de cálculos salvos) — **parcialmente concluída na Sessão 4**: comparação lado a lado dos campos comuns (model, preço justo, margem, veredito, data) funcionando; falta mostrar as premissas específicas de cada modelo (ex.: qual dividendo médio foi usado no Bazin daquela linha), que exigiria juntar com as 7 tabelas de input
-- [ ] 4.3 — Tela: cripto/indicadores (o painel cru já existe desde a Fase 3.3, falta vestir com shadcn/ui)
+- [x] 4.3 — Tela: cripto/indicadores — **vestida com shadcn/ui na Sessão 4** (mesmo painel de registro/placar, agora com Card/Select/Table/Badge em vez de HTML cru)
 - [ ] 4.4 — Tela: alertas/zona de compra
-- [x] 4.5 — Direção visual → **arejado, tipo dashboard** (Tailwind + shadcn/ui + TanStack Table), decidido na Sessão 1
+- [x] 4.5 — Direção visual → **arejado, tipo dashboard** (Tailwind + shadcn/ui + TanStack Table), decidido na Sessão 1; **identidade de cor definida na Sessão 4** — dark navy + verde claro, inspirada no TruthID (ver Log de Sessões)
 
 ---
 
@@ -586,10 +586,15 @@ Diferente de ação (1x/ano), aqui é um **score contínuo**: cada indicador vir
 - `cargo check`, `cargo test --lib` (32 testes, nada quebrou) e `npx tsc --noEmit` limpos. Smoke test real rodado (`docker compose up`) — **usuário confirmou visualmente que a lista mostra o BBAS3/Bazin salvo e que o drill-down pro detalhe funciona** ("mt massa deu boa")
 - **Marco**: Fase 4.1 concluída, Fase 4.2 parcialmente concluída (falta só o detalhe fino das premissas por modelo) — primeira tela do projeto com visual de verdade (shadcn/ui), não mais rascunho cru
 
+- **Continuação da Sessão 4 (vestir os 7 formulários + painel cripto — nota pendente desde a Sessão 3, feita ainda hoje a pedido do usuário)**: instalados os componentes shadcn que faltavam (`label`, `input`, `select`, `tabs`, além de `table`/`button`/`badge`/`card` já usados na tela de valuations salvos). Dois componentes compartilhados extraídos pra não repetir em 8 arquivos: `src/components/Field.tsx` (par Label+campo, mesmo formato do antigo `<label className="flex flex-col gap-1">`) e `src/components/VerdictBadge.tsx` (extraído de dentro do `SavedValuationsPanel`, agora reusado também pelo `ValuationResult`). Os 7 `models/*Form.tsx` + `ValuationResult.tsx` + `CryptoScorePanel.tsx` reescritos com `Card`/`Field`+`Input`/`Button`/`Select` no lugar do HTML cru; `App.tsx` trocou os botões do alternador de seção por `Tabs` de verdade e o dropdown de modelo por `Select`. Nenhuma mudança de lógica/Rust — só camada visual
+- **Identidade visual definida (dark navy + verde)**: usuário pediu uma "personalidade" pro app inspirada no TruthID (que é dark quase preto com accent ciano, ver `truthid/desktop/src/App.css`) — só que verde. Como o shadcn/Tailwind v4 já centraliza toda cor em variáveis CSS (`:root`/`.dark` no `index.css`, geradas no `init`), a troca foi só nesse bloco, sem tocar em nenhum componente: `index.html` ganhou `class="dark"` fixo (sem alternância clara/escura — é a única aparência do app, não um tema opcional) e o bloco `.dark` do `index.css` foi reescrito com a paleta (`--background: #0b0f14`, `--card: #111820`, `--foreground: #e6edf3`, `--primary: #4ade80` — verde na mesma "temperatura" do ciano `#4dd0e1` do TruthID, só com o matiz trocado). Os badges de veredito/sinal (`VerdictBadge`, `SIGNAL_STYLE` do cripto) não foram tocados — já usam classes `dark:` do Tailwind diretamente, que passam a valer sempre agora que `.dark` está sempre presente
+- `npx tsc --noEmit` limpo, `cargo check` sem novidade (nenhum arquivo Rust mudou nesta parte). Dois smoke tests reais rodados (`docker compose up`) — **usuário confirmou visualmente o reskin dos formulários/painel cripto** e, em seguida, **confirmou visualmente o tema dark+verde** ("top deu boa")
+- **Marco**: Fase 4.3 concluída (painel cripto vestido) e Fase 4.5 (direção visual) ganhou a identidade de cor definida, não só a decisão de biblioteca
+
 **Pendências pra próxima sessão** (em ordem):
-1. **Fase 4, continuação**: 4.2 fino (mostrar as premissas específicas de cada modelo na tela de detalhe, juntando com as 7 tabelas de input) e/ou 4.3 (vestir o painel cripto cru com shadcn/ui) e/ou "vestir os 7 formulários de cálculo de uma vez" (nota da Sessão 3, ainda não feita)
+1. **Fase 4, continuação**: 4.2 fino (mostrar as premissas específicas de cada modelo na tela de detalhe, juntando com as 7 tabelas de input) e 4.4 (tela de alertas/zona de compra, depende da Fase 5 primeiro)
 2. Corrigir a mensagem genérica de `AppError::InvalidGuard` (achado da Sessão 4 — hoje toda guarda dos 7 modelos mostra a mesma frase do Bazin na UI, independente de qual guarda disparou)
-3. README.md e LICENSE na raiz do repo ainda não existem (Fase 0.5/6.2/6.3)
+3. README.md e LICENSE na raiz do repo ainda não existem (Fase 0.5/6.2/6.3) — se o README ganhar screenshot, já vai refletir o tema dark+verde novo
 4. Quando o usuário voltar a mexer no TruthID mobile, lembrar que o cache Docker foi limpo (Sessão 1 do Practice Valuation) — primeiro `docker compose up` de lá vai ser mais lento
 5. Se algum dia migrar a imagem Docker (Node/Debian), lembrar dos 3 fixes de rede/instalação da Sessão 1 (IPv6, npm audit, node_modules corrompido) — não são óbvios
 
