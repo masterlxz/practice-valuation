@@ -2,8 +2,8 @@ use serde::Serialize;
 
 #[derive(Debug, thiserror::Error)]
 pub enum AppError {
-    #[error("desired yield must be greater than zero")]
-    InvalidGuard,
+    #[error("{0}")]
+    InvalidGuard(String),
     #[error("green and red boundaries must differ to define a direction")]
     EqualThresholds,
     #[error("no threshold configured for indicator '{0}'")]
@@ -17,7 +17,7 @@ pub enum AppError {
 impl AppError {
     fn code(&self) -> &'static str {
         match self {
-            AppError::InvalidGuard => "INVALID_GUARD",
+            AppError::InvalidGuard(_) => "INVALID_GUARD",
             AppError::EqualThresholds => "EQUAL_THRESHOLDS",
             AppError::UnknownIndicator(_) => "UNKNOWN_INDICATOR",
             AppError::NotFound(_) => "NOT_FOUND",

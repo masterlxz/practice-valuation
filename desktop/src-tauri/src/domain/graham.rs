@@ -28,7 +28,9 @@ pub struct ValuationOutcome {
 // Graham_Number = RAIZ(22.5 × LPA × VPA)
 pub fn calculate(inputs: &GrahamInputs, current_price: f64) -> Result<ValuationOutcome, AppError> {
     if inputs.eps <= 0.0 || inputs.book_value_per_share <= 0.0 {
-        return Err(AppError::InvalidGuard);
+        return Err(AppError::InvalidGuard(
+            "EPS and book value per share must both be greater than zero".to_string(),
+        ));
     }
 
     let fair_price = (22.5 * inputs.eps * inputs.book_value_per_share).sqrt();
@@ -86,7 +88,7 @@ mod tests {
 
         assert!(matches!(
             calculate(&inputs, 20.0),
-            Err(AppError::InvalidGuard)
+            Err(AppError::InvalidGuard(_))
         ));
     }
 
@@ -99,7 +101,7 @@ mod tests {
 
         assert!(matches!(
             calculate(&inputs, 20.0),
-            Err(AppError::InvalidGuard)
+            Err(AppError::InvalidGuard(_))
         ));
     }
 }

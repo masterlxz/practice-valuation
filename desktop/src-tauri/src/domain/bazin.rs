@@ -28,7 +28,9 @@ pub struct ValuationOutcome {
 // Preco_Teto = Dividendo_Médio / Yield_Desejado
 pub fn calculate(inputs: &BazinInputs, current_price: f64) -> Result<ValuationOutcome, AppError> {
     if inputs.desired_yield <= 0.0 {
-        return Err(AppError::InvalidGuard);
+        return Err(AppError::InvalidGuard(
+            "desired yield must be greater than zero".to_string(),
+        ));
     }
 
     let fair_price = inputs.average_dividend / inputs.desired_yield;
@@ -86,7 +88,7 @@ mod tests {
 
         assert!(matches!(
             calculate(&inputs, 40.0),
-            Err(AppError::InvalidGuard)
+            Err(AppError::InvalidGuard(_))
         ));
     }
 }

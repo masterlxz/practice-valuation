@@ -30,7 +30,9 @@ pub struct ValuationOutcome {
 // Preco_Justo = D1 / (Ke − g)
 pub fn calculate(inputs: &GordonInputs, current_price: f64) -> Result<ValuationOutcome, AppError> {
     if inputs.ke <= inputs.expected_growth {
-        return Err(AppError::InvalidGuard);
+        return Err(AppError::InvalidGuard(
+            "Ke must be greater than the expected growth rate".to_string(),
+        ));
     }
 
     let d1 = inputs.current_dividend * (1.0 + inputs.expected_growth);
@@ -92,7 +94,7 @@ mod tests {
 
         assert!(matches!(
             calculate(&inputs, 25.0),
-            Err(AppError::InvalidGuard)
+            Err(AppError::InvalidGuard(_))
         ));
     }
 
@@ -106,7 +108,7 @@ mod tests {
 
         assert!(matches!(
             calculate(&inputs, 25.0),
-            Err(AppError::InvalidGuard)
+            Err(AppError::InvalidGuard(_))
         ));
     }
 }

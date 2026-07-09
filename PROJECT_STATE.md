@@ -2,7 +2,7 @@
 
 > Este arquivo é o centro de controle do projeto. Atualizado a cada sessão de trabalho.
 > Pode ser lido por qualquer instância do Claude Code em qualquer máquina para retomar o contexto.
-> Última atualização: 2026-07-09 (Sessão 4, fim — score cripto fechado (Fase 3 completa), tela "Saved Valuations" completa (incl. detalhe fino de premissas), os 7 formulários + painel cripto vestidos com shadcn/ui, identidade visual dark navy + verde definida, layout geral em grid (menos vertical) e o painel cripto redesenhado como dashboard (KPI tiles + update em lote). Retomar por "Pendências pra próxima sessão", item 1)
+> Última atualização: 2026-07-09 (Sessão 4, fim — score cripto fechado (Fase 3 completa), tela "Saved Valuations" completa (incl. detalhe fino de premissas), os 7 formulários + painel cripto vestidos com shadcn/ui, identidade visual dark navy + verde definida, layout geral em grid (menos vertical), painel cripto redesenhado como dashboard (KPI tiles + update em lote), e mensagens de guarda (`InvalidGuard`) corrigidas pra ser específicas por modelo. Retomar por "Pendências pra próxima sessão", item 1 — decidir entre Fase 2 e Fase 5)
 
 ---
 
@@ -604,12 +604,15 @@ Diferente de ação (1x/ano), aqui é um **score contínuo**: cada indicador vir
   - `npx tsc --noEmit` limpo em cada etapa (nenhuma mudança em Rust nesta parte). Três smoke tests reais rodados — **usuário confirmou o grid mais largo, confirmou o "Update all" em lote, e confirmou o grid de KPI tiles** ("melhorou agora top")
 - **Marco**: layout geral do app deixou de ser uma coluna estreita só; painel cripto passou de "formulário de log" pra "tela de análise" de verdade, alinhado com o pedido original de "tipo uma planilha" (ver histórico da conversa) — dashboard, não formulário sequencial
 
+- **Continuação da Sessão 4 (corrigido o achado do próprio dia — mensagem genérica de `AppError::InvalidGuard`)**: o enum virou `InvalidGuard(String)` (era `InvalidGuard` sem dado, com a mensagem fixa no `#[error("...")]` do `thiserror`) — cada um dos 7 `domain/*.rs` agora passa sua própria mensagem no `return Err(AppError::InvalidGuard("...".to_string()))` (ex.: Gordon → "Ke must be greater than the expected growth rate", DCF → "WACC must be greater than the perpetuity growth rate", RNAV → "shares outstanding must be greater than zero"). Os testes unitários que verificavam `Err(AppError::InvalidGuard)` viraram `Err(AppError::InvalidGuard(_))` (ignora o conteúdo da mensagem, só confirma a variante). Nenhuma mudança de frontend necessária — `ValuationResult`/os formulários já exibem `error.message` genericamente
+- `cargo check`, `cargo test --lib` (32 testes, todos passando) e `npx tsc --noEmit` limpos. Smoke test real rodado — **usuário confirmou visualmente que a mensagem de erro agora é específica por modelo** ("deu boa")
+- **Marco**: pendência #2 da lista anterior resolvida — não sobra nenhum item pequeno registrado, só a decisão de direção (Fase 2 vs Fase 5) e README/LICENSE
+
 **Pendências pra próxima sessão** (em ordem):
-1. Fase 4.4 (tela de alertas/zona de compra) só faz sentido depois da Fase 5 (motor de monitoramento) — considerar se a próxima frente é Fase 2 (coleta de dados, ainda não iniciada) ou Fase 5 diretamente
-2. Corrigir a mensagem genérica de `AppError::InvalidGuard` (achado da Sessão 4 — hoje toda guarda dos 7 modelos mostra a mesma frase do Bazin na UI, independente de qual guarda disparou)
-3. README.md e LICENSE na raiz do repo ainda não existem (Fase 0.5/6.2/6.3) — se o README ganhar screenshot, já vai refletir o tema dark+verde novo e o layout em grid
-4. Quando o usuário voltar a mexer no TruthID mobile, lembrar que o cache Docker foi limpo (Sessão 1 do Practice Valuation) — primeiro `docker compose up` de lá vai ser mais lento
-5. Se algum dia migrar a imagem Docker (Node/Debian), lembrar dos 3 fixes de rede/instalação da Sessão 1 (IPv6, npm audit, node_modules corrompido) — não são óbvios
+1. Decidir a próxima frente grande: **Fase 2** (coleta de dados — ainda não iniciada, clientes Python pra bolsai/brapi/CVM/CoinGecko/etc.) ou **Fase 5** (motor de alertas/zona de compra, mais contido, já aproveita 100% do que está no banco hoje mesmo sendo digitado à mão)
+2. README.md e LICENSE na raiz do repo ainda não existem (Fase 0.5/6.2/6.3) — usuário disse que prefere esperar ter mais "repertório" (mais telas/decisões tomadas) antes de escrever o README
+3. Quando o usuário voltar a mexer no TruthID mobile, lembrar que o cache Docker foi limpo (Sessão 1 do Practice Valuation) — primeiro `docker compose up` de lá vai ser mais lento
+4. Se algum dia migrar a imagem Docker (Node/Debian), lembrar dos 3 fixes de rede/instalação da Sessão 1 (IPv6, npm audit, node_modules corrompido) — não são óbvios
 
 ---
 

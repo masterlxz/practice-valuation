@@ -34,7 +34,9 @@ pub fn calculate(inputs: &BanksInputs, current_price: f64) -> Result<ValuationOu
     let sustainable_growth = inputs.roe * (1.0 - inputs.payout);
 
     if inputs.ke <= sustainable_growth {
-        return Err(AppError::InvalidGuard);
+        return Err(AppError::InvalidGuard(
+            "Ke must be greater than the sustainable growth rate".to_string(),
+        ));
     }
 
     let fair_pb = (inputs.roe - sustainable_growth) / (inputs.ke - sustainable_growth);
@@ -101,7 +103,7 @@ mod tests {
 
         assert!(matches!(
             calculate(&inputs, 25.0),
-            Err(AppError::InvalidGuard)
+            Err(AppError::InvalidGuard(_))
         ));
     }
 }

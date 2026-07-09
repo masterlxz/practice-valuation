@@ -31,7 +31,9 @@ pub struct ValuationOutcome {
 // RNAV/Ação  = RNAV_Total / Nº_Ações
 pub fn calculate(inputs: &RnavInputs, current_price: f64) -> Result<ValuationOutcome, AppError> {
     if inputs.shares_outstanding <= 0.0 {
-        return Err(AppError::InvalidGuard);
+        return Err(AppError::InvalidGuard(
+            "shares outstanding must be greater than zero".to_string(),
+        ));
     }
 
     let rnav_total = inputs.landbank + inputs.inventory_at_market_value + inputs.net_cash;
@@ -111,7 +113,7 @@ mod tests {
 
         assert!(matches!(
             calculate(&inputs, 8.0),
-            Err(AppError::InvalidGuard)
+            Err(AppError::InvalidGuard(_))
         ));
     }
 }

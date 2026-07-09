@@ -53,7 +53,9 @@ pub fn calculate(inputs: &DcfInputs, current_price: f64) -> Result<ValuationOutc
         + (inputs.total_debt / (equity + inputs.total_debt)) * inputs.kd * (1.0 - inputs.tax_rate);
 
     if wacc - inputs.perpetuity_growth <= 0.0 {
-        return Err(AppError::InvalidGuard);
+        return Err(AppError::InvalidGuard(
+            "WACC must be greater than the perpetuity growth rate".to_string(),
+        ));
     }
 
     let firm_value = fcff * (1.0 + inputs.perpetuity_growth) / (wacc - inputs.perpetuity_growth);
@@ -122,7 +124,7 @@ mod tests {
 
         assert!(matches!(
             calculate(&inputs, 10.0),
-            Err(AppError::InvalidGuard)
+            Err(AppError::InvalidGuard(_))
         ));
     }
 }

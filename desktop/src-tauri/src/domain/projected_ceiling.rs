@@ -36,7 +36,9 @@ pub fn calculate(
     current_price: f64,
 ) -> Result<ValuationOutcome, AppError> {
     if inputs.desired_yield <= 0.0 {
-        return Err(AppError::InvalidGuard);
+        return Err(AppError::InvalidGuard(
+            "desired yield must be greater than zero".to_string(),
+        ));
     }
 
     let projected_dividend =
@@ -107,7 +109,7 @@ mod tests {
 
         assert!(matches!(
             calculate(&inputs, 30.0),
-            Err(AppError::InvalidGuard)
+            Err(AppError::InvalidGuard(_))
         ));
     }
 
