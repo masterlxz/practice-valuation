@@ -5,5 +5,6 @@ pub use super::bazin_inputs::Entity as BazinInputs;
 pub use super::dcf_inputs::Entity as DcfInputs;
 pub use super::gordon_inputs::Entity as GordonInputs;
 pub use super::graham_inputs::Entity as GrahamInputs;
+pub use super::projected_ceiling_inputs::Entity as ProjectedCeilingInputs;
 pub use super::rnav_inputs::Entity as RnavInputs;
 pub use super::valuation::Entity as Valuation;

@@ -5,6 +5,7 @@ import GordonForm from "./models/GordonForm";
 import DcfForm from "./models/DcfForm";
 import BanksForm from "./models/BanksForm";
 import RnavForm from "./models/RnavForm";
+import ProjectedCeilingForm from "./models/ProjectedCeilingForm";
 
 const MODELS = {
   bazin: { label: "Bazin", component: BazinForm },
@@ -13,6 +14,10 @@ const MODELS = {
   dcf: { label: "DCF / FCFF", component: DcfForm },
   banks: { label: "Banks (P/B)", component: BanksForm },
   rnav: { label: "RNAV", component: RnavForm },
+  projected_ceiling: {
+    label: "Projected Ceiling",
+    component: ProjectedCeilingForm,
+  },
 } as const;
 
 type ModelKey = keyof typeof MODELS;
