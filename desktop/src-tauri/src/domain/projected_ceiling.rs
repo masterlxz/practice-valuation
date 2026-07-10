@@ -1,5 +1,6 @@
 use crate::error::AppError;
 
+#[derive(serde::Deserialize)]
 pub struct ProjectedCeilingInputs {
     pub current_dividend: f64,
     pub expected_growth: f64,

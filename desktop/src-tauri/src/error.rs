@@ -14,6 +14,8 @@ pub enum AppError {
     CollectorBusy,
     #[error("data collector failed: {0}")]
     CollectorFailed(String),
+    #[error("invalid input: {0}")]
+    InvalidInput(String),
     #[error("database error: {0}")]
     Database(#[from] sea_orm::DbErr),
 }
@@ -27,6 +29,7 @@ impl AppError {
             AppError::NotFound(_) => "NOT_FOUND",
             AppError::CollectorBusy => "COLLECTOR_BUSY",
             AppError::CollectorFailed(_) => "COLLECTOR_FAILED",
+            AppError::InvalidInput(_) => "INVALID_INPUT",
             AppError::Database(_) => "DATABASE_ERROR",
         }
     }

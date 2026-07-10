@@ -26,6 +26,8 @@ pub fn run() {
             commands::crypto_indicator::list_crypto_indicators,
             commands::valuation::list_valuations,
             commands::valuation::get_valuation_inputs,
+            commands::valuation::update_valuation,
+            commands::valuation::delete_valuation,
             commands::collector::run_stock_collector,
             commands::collector::list_stock_quotes
         ])

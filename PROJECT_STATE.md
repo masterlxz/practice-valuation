@@ -2,7 +2,7 @@
 
 > Este arquivo é o centro de controle do projeto. Atualizado a cada sessão de trabalho.
 > Pode ser lido por qualquer instância do Claude Code em qualquer máquina para retomar o contexto.
-> Última atualização: 2026-07-09 (Sessão 4, fim — Fase 3 completa (7 modelos + score cripto), Fase 4 avançada (Saved Valuations completo, tudo vestido com shadcn/ui, identidade visual dark+verde, layout em grid), mensagens de guarda corrigidas, e **Fase 2 iniciada**: primeira fonte de dado real (cotação de ações via brapi) rodando ponta a ponta — botão na aba Valuation → subprocess Python → grava em `stock_quotes`. Retomar por "Pendências pra próxima sessão", item 1)
+> Última atualização: 2026-07-09 (Sessão 4, fim — Fase 3 completa (7 modelos + score cripto), Fase 4 avançada (Saved Valuations completo com edição/exclusão em lugar, tudo vestido com shadcn/ui, identidade visual dark+verde, layout em grid), mensagens de guarda corrigidas, e Fase 2 iniciada (cotação via brapi rodando ponta a ponta). Retomar por "Pendências pra próxima sessão", item 1)
 
 ---
 
@@ -426,7 +426,7 @@ Diferente de ação (1x/ano), aqui é um **score contínuo**: cada indicador vir
 
 **Etapas**:
 - [x] 4.1 — Tela: lista de ativos acompanhados — **concluída na Sessão 4** como "Saved Valuations": tickers distintos derivados da tabela `valuation` (sem tabela `asset` própria — ver Log de Sessões)
-- [x] 4.2 — Tela: detalhe do ativo (histórico de cálculos salvos) — **concluída na Sessão 4**: comparação lado a lado dos campos comuns, mais o detalhe fino (linha expansível "Assumptions" por cálculo, buscando a tabela de inputs certa conforme o `model`)
+- [x] 4.2 — Tela: detalhe do ativo (histórico de cálculos salvos) — **concluída na Sessão 4**: comparação lado a lado dos campos comuns, detalhe fino (linha expansível "Assumptions" por cálculo) e **edição/exclusão em lugar** (coluna "Actions": View/Edit/Delete) — corrige um cálculo salvo sem virar linha nova, e remove um cálculo (cascade limpa a tabela de inputs específica sozinho)
 - [x] 4.3 — Tela: cripto/indicadores — **vestida com shadcn/ui na Sessão 4** (mesmo painel de registro/placar, agora com Card/Select/Table/Badge em vez de HTML cru)
 - [ ] 4.4 — Tela: alertas/zona de compra
 - [x] 4.5 — Direção visual → **arejado, tipo dashboard** (Tailwind + shadcn/ui + TanStack Table), decidido na Sessão 1; **identidade de cor definida na Sessão 4** — dark navy + verde claro, inspirada no TruthID (ver Log de Sessões)
@@ -617,6 +617,16 @@ Diferente de ação (1x/ano), aqui é um **score contínuo**: cada indicador vir
   - `cargo check`, `cargo test --lib` (32 testes, nada quebrou — collector não tem lógica de domínio, só orquestração) e `npx tsc --noEmit` limpos. Múltiplos smoke tests reais — **usuário confirmou visualmente que o botão busca cotação real da brapi e grava no banco** ("funcinou sim")
   - Usuário perguntou duas vezes se os tickers de exemplo "ficam lá" — reforçado que é só config editável (`data-collector/config.yaml`), não hardcoded, sem risco de virar dado permanente ou vazar portfólio real
 - **Marco**: Fase 2 deixou de ser "não iniciada" — primeira fonte de dado real funcionando ponta a ponta (Python → SQLite → botão → UI). Próximas fontes (CVM, bolsai, cripto) seguem o mesmo molde já provado
+
+- **Continuação da Sessão 4 (editar/excluir valuations salvos — pedido do usuário depois de ver a tela de análise funcionando)**: até aqui o schema seguia a regra fixa "nunca sobrescreve, cada cálculo é uma linha nova" (Fase 1). Usuário pediu uma exceção proposital: poder **corrigir** um cálculo salvo (typo num número) ou **remover** um de vez, sem virar uma linha nova a cada correção — **planejado com `/plan`**, verificando antes duas coisas técnicas em vez de assumir:
+  - Conferido no código-fonte do `sqlx-sqlite` (driver por baixo do SeaORM) que `foreign_keys = ON` já vem ligado por padrão nas conexões do app — então o `ON DELETE CASCADE` das 7 tabelas de input (configurado desde a primeira migration, Sessão 1/2) já funciona de verdade; excluir uma `valuation` já limpa a tabela de input específica sozinho, sem precisar de fix extra
+  - **Desenho**: em vez de 7 comandos de update (um por modelo, espelhando os 7 de criação), **um comando genérico só** — reaproveita a mesma função pura de cálculo de cada modelo (`domain::X::calculate`, sem duplicar lógica) e o mesmo mapa `INPUT_FIELDS` já criado pra tela de "Assumptions" (Sessão 4, mais cedo) pra desenhar **um formulário de edição genérico** (não 7), que se adapta ao modelo da linha sendo editada
+  - Os 7 structs de input em `domain/*.rs` ganharam `#[derive(serde::Deserialize)]` (não derivavam nada antes) — único jeito de desserializar o JSON genérico vindo do front de volta pro tipo certo de cada modelo. Novo `AppError::InvalidInput` pra erro de desserialização (distinto de `InvalidGuard`, que é regra de negócio)
+  - `update_valuation` e `delete_valuation` em `commands/valuation.rs` (mesmo arquivo de `list_valuations`/`get_valuation_inputs`) — update dá `UPDATE` na linha de `valuation` e na tabela de input certa (filtrando por `valuation_id`, sem precisar buscar o `id` próprio da linha de input antes); delete só remove a `valuation`, cascade cuida do resto
+  - `src/valuations/EditValuationForm.tsx` (novo): busca os inputs atuais (reaproveita `get_valuation_inputs`), preenche o formulário, converte de volta no submit. `inputFields.ts` ganhou `toEditableString`/`fromEditableString` (inverso de `formatInputValue` — ex.: percentual mostra "6" pra editar, não "0.06", igual os 7 formulários de cálculo já fazem)
+  - `SavedValuationsPanel.tsx`: coluna "Assumptions" virou **"Actions"** com View/Edit/Delete. Delete exige clique duplo (primeiro clique vira "Confirm?", só o segundo executa) — trava manual contra exclusão sem querer, já que é ação sem volta
+  - `cargo check`, `cargo test --lib` (32 testes, nada quebrou — a lógica de cálculo em si não mudou) e `npx tsc --noEmit` limpos. Smoke test real — **usuário confirmou visualmente que editar atualiza a mesma linha (não cria nova) e que excluir remove de vez** ("sim deu certo")
+- **Marco**: Saved Valuations completo — lista, detalhe/comparação, premissas, edição e exclusão. Fase 4 não tem mais pendência conhecida além de 4.4 (alertas, depende da Fase 5)
 
 **Pendências pra próxima sessão** (em ordem):
 1. Fase 2, continuação: próxima fonte de dado (CVM — fundamentos pro DCF/RNAV/Bancos, mais complexa: zip anual + parsing de CSV — ou bolsai/cripto) — ver o "Log de Sessões" acima pro padrão já estabelecido (Python client → Rust subprocess command → tela)

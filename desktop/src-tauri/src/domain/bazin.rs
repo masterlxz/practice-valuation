@@ -1,5 +1,6 @@
 use crate::error::AppError;
 
+#[derive(serde::Deserialize)]
 pub struct BazinInputs {
     pub average_dividend: f64,
     pub desired_yield: f64,

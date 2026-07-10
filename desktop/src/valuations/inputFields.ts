@@ -137,3 +137,21 @@ export function formatInputValue(value: unknown, format: InputFieldFormat): stri
       return num.toFixed(2);
   }
 }
+
+// Round-trip pair for an editable <input> — same convention the calculator
+// forms already use (type "6" for 6%, not "0.06"). formatInputValue above is
+// display-only (adds "R$"/"%" text), these two keep the value plain so it
+// can go back into a number input and back out again.
+export function toEditableString(value: unknown, format: InputFieldFormat): string {
+  const num = Number(value);
+  if (format === "percentage") return String(num * 100);
+  if (format === "integer") return String(Math.round(num));
+  return String(num);
+}
+
+export function fromEditableString(value: string, format: InputFieldFormat): number {
+  const num = Number(value);
+  if (format === "percentage") return num / 100;
+  if (format === "integer") return Math.round(num);
+  return num;
+}

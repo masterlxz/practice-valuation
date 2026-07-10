@@ -1,5 +1,6 @@
 use crate::error::AppError;
 
+#[derive(serde::Deserialize)]
 pub struct BanksInputs {
     pub book_value_per_share: f64,
     pub roe: f64,

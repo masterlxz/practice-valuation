@@ -1,5 +1,6 @@
 use crate::error::AppError;
 
+#[derive(serde::Deserialize)]
 pub struct RnavInputs {
     pub landbank: f64,
     pub inventory_at_market_value: f64,

@@ -1,5 +1,6 @@
 use crate::error::AppError;
 
+#[derive(serde::Deserialize)]
 pub struct GrahamInputs {
     pub eps: f64,
     pub book_value_per_share: f64,

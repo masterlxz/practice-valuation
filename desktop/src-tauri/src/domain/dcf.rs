@@ -1,5 +1,6 @@
 use crate::error::AppError;
 
+#[derive(serde::Deserialize)]
 pub struct DcfInputs {
     pub ebit: f64,
     pub tax_rate: f64,

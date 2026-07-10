@@ -1,6 +1,6 @@
 import { Fragment, useMemo, useState, type ReactNode } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   flexRender,
   getCoreRowModel,
@@ -9,6 +9,7 @@ import {
 } from "@tanstack/react-table";
 import type { AppError, ValuationModel } from "../types";
 import { INPUT_FIELDS, formatInputValue } from "./inputFields";
+import EditValuationForm from "./EditValuationForm";
 import { Button } from "@/components/ui/button";
 import VerdictBadge from "../components/VerdictBadge";
 import {
@@ -36,7 +37,10 @@ const MODEL_LABELS: Record<string, string> = {
   projected_ceiling: "Projected Ceiling",
 };
 
-type View = { screen: "list" } | { screen: "detail"; ticker: string };
+type View =
+  | { screen: "list" }
+  | { screen: "detail"; ticker: string }
+  | { screen: "edit"; valuation: ValuationModel };
 
 type TickerSummary = {
   ticker: string;
@@ -211,6 +215,9 @@ const LIST_COLUMNS: ColumnDef<TickerSummary, any>[] = [
 function getDetailColumns(
   expandedId: number | null,
   onToggleExpanded: (id: number) => void,
+  onEdit: (valuation: ValuationModel) => void,
+  confirmingDeleteId: number | null,
+  onDeleteClick: (id: number) => void,
 ): ColumnDef<ValuationModel, any>[] {
   return [
     {
@@ -251,17 +258,36 @@ function getDetailColumns(
       cell: (info) => formatDateTime(info.getValue<string>()),
     },
     {
-      id: "assumptions",
-      header: "Assumptions",
-      cell: ({ row }) => (
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => onToggleExpanded(row.original.id)}
-        >
-          {expandedId === row.original.id ? "Hide" : "View"}
-        </Button>
-      ),
+      id: "actions",
+      header: "Actions",
+      cell: ({ row }) => {
+        const isConfirming = confirmingDeleteId === row.original.id;
+        return (
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => onToggleExpanded(row.original.id)}
+            >
+              {expandedId === row.original.id ? "Hide" : "View"}
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => onEdit(row.original)}
+            >
+              Edit
+            </Button>
+            <Button
+              variant={isConfirming ? "destructive" : "outline"}
+              size="sm"
+              onClick={() => onDeleteClick(row.original.id)}
+            >
+              {isConfirming ? "Confirm?" : "Delete"}
+            </Button>
+          </div>
+        );
+      },
     },
   ];
 }
@@ -269,6 +295,11 @@ function getDetailColumns(
 function SavedValuationsPanel() {
   const [view, setView] = useState<View>({ screen: "list" });
   const [expandedId, setExpandedId] = useState<number | null>(null);
+  const [confirmingDeleteId, setConfirmingDeleteId] = useState<number | null>(
+    null,
+  );
+
+  const queryClient = useQueryClient();
 
   const valuationsQuery = useQuery<ValuationModel[], AppError>({
     queryKey: ["valuations"],
@@ -282,13 +313,48 @@ function SavedValuationsPanel() {
     [valuations],
   );
 
+  const deleteMutation = useMutation<void, AppError, number>({
+    mutationFn: (valuationId) =>
+      invoke("delete_valuation", { valuationId }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["valuations"] });
+      setConfirmingDeleteId(null);
+    },
+  });
+
+  function handleDeleteClick(id: number) {
+    if (confirmingDeleteId === id) {
+      deleteMutation.mutate(id);
+    } else {
+      setConfirmingDeleteId(id);
+    }
+  }
+
   const detailColumns = useMemo(
     () =>
-      getDetailColumns(expandedId, (id) =>
-        setExpandedId((current) => (current === id ? null : id)),
+      getDetailColumns(
+        expandedId,
+        (id) => setExpandedId((current) => (current === id ? null : id)),
+        (valuation) => setView({ screen: "edit", valuation }),
+        confirmingDeleteId,
+        handleDeleteClick,
       ),
-    [expandedId],
+    [expandedId, confirmingDeleteId],
   );
+
+  if (view.screen === "edit") {
+    return (
+      <EditValuationForm
+        valuation={view.valuation}
+        onDone={() =>
+          setView({ screen: "detail", ticker: view.valuation.ticker })
+        }
+        onCancel={() =>
+          setView({ screen: "detail", ticker: view.valuation.ticker })
+        }
+      />
+    );
+  }
 
   if (view.screen === "detail") {
     const ticker = view.ticker;
@@ -309,6 +375,9 @@ function SavedValuationsPanel() {
           </div>
         </CardHeader>
         <CardContent>
+          {deleteMutation.isError && (
+            <p className="mb-3 text-red-600">{deleteMutation.error.message}</p>
+          )}
           <DataTable
             columns={detailColumns}
             data={tickerValuations}
