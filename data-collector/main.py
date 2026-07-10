@@ -14,7 +14,7 @@ from pathlib import Path
 import yaml
 from dotenv import load_dotenv
 
-from sources import acoes_bolsai, acoes_brapi, cripto_defillama
+from sources import acoes_bolsai, acoes_brapi, cripto_defillama, cripto_ultrasound
 
 BASE_DIR = Path(__file__).parent
 DB_PATH = BASE_DIR / "practice_valuation.db"
@@ -110,20 +110,19 @@ def _classify_signal(raw_value: float, green_boundary: float, red_boundary: floa
     return "NEUTRAL"
 
 
-def collect_crypto_tvl_trend() -> dict:
+def _record_crypto_indicator(indicator: str, source: str, raw_value: float) -> dict:
     conn = sqlite3.connect(DB_PATH)
     conn.execute("PRAGMA journal_mode=WAL")
 
     threshold = conn.execute(
         "SELECT green_boundary, red_boundary FROM indicator_thresholds WHERE indicator = ?",
-        ("tvl_trend",),
+        (indicator,),
     ).fetchone()
     if threshold is None:
         conn.close()
-        raise RuntimeError("No threshold configured for 'tvl_trend' — run migrations first")
+        raise RuntimeError(f"No threshold configured for '{indicator}' — run migrations first")
     green_boundary, red_boundary = threshold
 
-    raw_value = cripto_defillama.fetch_tvl_trend_mom()
     signal = _classify_signal(raw_value, green_boundary, red_boundary)
     reading_date = datetime.now(timezone.utc).date().isoformat()
     now = datetime.now(timezone.utc).isoformat()
@@ -132,18 +131,31 @@ def collect_crypto_tvl_trend() -> dict:
         "INSERT INTO crypto_indicators "
         "(coin, indicator, reading_date, raw_value, signal, source, created_at) "
         "VALUES (?, ?, ?, ?, ?, ?, ?)",
-        ("ETH", "tvl_trend", reading_date, raw_value, signal, "defillama", now),
+        ("ETH", indicator, reading_date, raw_value, signal, source, now),
     )
     conn.commit()
     conn.close()
 
-    return {"indicator": "tvl_trend", "raw_value": raw_value, "signal": signal}
+    return {"indicator": indicator, "raw_value": raw_value, "signal": signal}
+
+
+def collect_crypto_tvl_trend() -> dict:
+    raw_value = cripto_defillama.fetch_tvl_trend_mom()
+    return _record_crypto_indicator("tvl_trend", "defillama", raw_value)
+
+
+def collect_crypto_net_issuance() -> dict:
+    raw_value = cripto_ultrasound.fetch_net_issuance_annualized_pct()
+    return _record_crypto_indicator("net_issuance", "ultrasound.money", raw_value)
 
 
 def main_crypto() -> int:
-    reading = collect_crypto_tvl_trend()
+    tvl = collect_crypto_tvl_trend()
+    print(f"TVL Trend (MoM): {tvl['raw_value']:.2f}% -> {tvl['signal']}")
+
+    net_issuance = collect_crypto_net_issuance()
     print(
-        f"TVL Trend (MoM): {reading['raw_value']:.2f}% -> {reading['signal']}"
+        f"Net Issuance (annualized): {net_issuance['raw_value']:.2f}% -> {net_issuance['signal']}"
     )
     return 0
 
