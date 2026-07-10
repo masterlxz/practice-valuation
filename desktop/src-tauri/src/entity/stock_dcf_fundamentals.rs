@@ -26,6 +26,8 @@ pub struct Model {
     pub shares_outstanding: f64,
     pub source: String,
     pub fetched_at: String,
+    #[sea_orm(column_type = "Double", nullable)]
+    pub tax_rate: Option<f64>,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

@@ -33,6 +33,16 @@ nos próprios dados da CVM pra essa companhia especificamente, não um bug de
 leitura). A bolsai já devolve `shares_outstanding` correto e conferido no
 `/fundamentals` (mesma chamada que já busca LPA/VPA/ROE/cvm_code) — reaproveitado
 em `main.py` em vez de extrair (e arriscar) esse campo da CVM.
+
+**Alíquota efetiva (`tax_rate`) também é melhor-esforço, mas por um motivo
+diferente de D&A/Capex**: o código da conta é estável (`3.07`/`3.08` da
+DRE, mesma tabela do EBIT), o problema é matemático — resultado antes dos
+tributos perto de zero faz a razão explodir (achado testando a MGLU3 real:
+resultado quase zero e negativo, "deu" 263%). Devolve `None` quando o
+resultado antes dos tributos é zero/negativo ou a razão sai acima de um
+teto de sanidade generoso (100%) — mas **não** limita alíquotas altas e
+plausíveis (a VALE3 real deu 55,75%, legítimo pra uma mineradora com
+tributação de subsidiárias no exterior, e passa normal).
 """
 
 import csv
@@ -161,6 +171,39 @@ def _find_by_keyword(
     return abs(sum(_to_millions_brl(r) for r in leaves))
 
 
+# Teto de sanidade pra alíquota efetiva. Testando contra empresas reais:
+# a VALE3 deu 55,75% (alíquota alta, mas real — mineradoras pagam CFEM e
+# retenção na fonte de subsidiárias no exterior, não é bug); já a MGLU3 deu
+# 263% só porque o resultado pré-tributos tava perto de zero (instabilidade
+# de divisão, não alíquota de verdade — mas esse caso já é pego pelo guard
+# de `pretax_income <= 0` abaixo). O teto aqui é só uma rede de segurança
+# extra pra positivos-mas-perto-de-zero que passariam por aquele guard.
+_MAX_PLAUSIBLE_TAX_RATE = 100.0
+
+
+def _effective_tax_rate(dre_rows: list[dict]) -> float | None:
+    """Alíquota efetiva = IR e CSLL ÷ resultado antes dos tributos, ambos da
+    DRE (`3.08`/`3.07` — mesma tabela do EBIT, ~97% estáveis entre empresas).
+    Devolvido em % (16.83, não 0.1683), mesma convenção já usada nesta
+    tabela de referência pro ROE.
+
+    Devolve `None` quando o resultado antes dos tributos é zero/negativo ou
+    quando a razão sai fora de uma faixa plausível — nesses casos o número
+    é matematicamente instável (divisão por algo perto de zero), não uma
+    alíquota de verdade."""
+    pretax_income = _find_exact(dre_rows, "3.07")
+    tax_expense = _find_exact(dre_rows, "3.08")
+
+    if pretax_income <= 0:
+        return None
+
+    tax_rate = -tax_expense / pretax_income * 100
+    if not (0.0 <= tax_rate <= _MAX_PLAUSIBLE_TAX_RATE):
+        return None
+
+    return tax_rate
+
+
 def _nwc_change(bpa_rows: list[dict], bpp_rows: list[dict]) -> float:
     """ΔNWC = (Contas a Receber + Estoques − Fornecedores) no exercício
     atual menos o mesmo cálculo no exercício anterior — usa só os 3 códigos
@@ -177,17 +220,18 @@ def _nwc_change(bpa_rows: list[dict], bpp_rows: list[dict]) -> float:
 
 
 def fetch_dcf_fundamentals(ticker_cvm_codes: dict[str, str]) -> list[dict]:
-    """Busca os 6 campos do DCF derivados de dados contábeis da CVM (EBIT,
-    D&A, Capex, ΔNWC, dívida total, caixa) pra cada ticker. `shares_outstanding`
-    não vem daqui — ver nota no topo do arquivo.
+    """Busca os 7 campos do DCF derivados de dados contábeis da CVM (EBIT,
+    alíquota efetiva, D&A, Capex, ΔNWC, dívida total, caixa) pra cada
+    ticker. `shares_outstanding` não vem daqui — ver nota no topo do arquivo.
 
     `ticker_cvm_codes` é {ticker: cvm_code} — já resolvido via
     `acoes_bolsai.fetch_fundamentals` (mesma chamada que já busca LPA/VPA/ROE,
     sem chamada extra só pra achar a empresa). Retorna uma lista de dicts
-    com `ticker`, `reference_year`, `ebit`, `depreciation_amortization`
-    (pode ser `None`), `capex` (pode ser `None`), `nwc_change`, `total_debt`,
-    `cash`. Um ticker sem dado encontrável (ex.: banco — taxonomia de DRE
-    diferente, ver domain/dcf.rs) é ignorado, não derruba o restante.
+    com `ticker`, `reference_year`, `ebit`, `tax_rate`,
+    `depreciation_amortization` (pode ser `None`), `capex` (pode ser
+    `None`), `nwc_change`, `total_debt`, `cash`. Um ticker sem dado
+    encontrável (ex.: banco — taxonomia de DRE diferente, ver domain/dcf.rs)
+    é ignorado, não derruba o restante.
     """
     zip_path = _resolve_zip_path()
     results = []
@@ -216,6 +260,7 @@ def fetch_dcf_fundamentals(ticker_cvm_codes: dict[str, str]) -> list[dict]:
                     "ticker": ticker,
                     "reference_year": year,
                     "ebit": _find_exact(company_dre, "3.05"),
+                    "tax_rate": _effective_tax_rate(company_dre),
                     "depreciation_amortization": _find_by_keyword(
                         company_dfc,
                         "6.01.01",

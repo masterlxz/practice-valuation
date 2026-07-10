@@ -53,6 +53,7 @@ type StockDcfFundamentals = {
   ticker: string;
   reference_year: number;
   ebit: number;
+  tax_rate: number | null;
   depreciation_amortization: number | null;
   capex: number | null;
   nwc_change: number;
@@ -277,6 +278,7 @@ function StockCollectorPanel() {
               <TableHead>Ticker</TableHead>
               <TableHead>Ref. year</TableHead>
               <TableHead>EBIT</TableHead>
+              <TableHead>Tax rate</TableHead>
               <TableHead>D&amp;A</TableHead>
               <TableHead>Capex</TableHead>
               <TableHead>ΔNWC</TableHead>
@@ -289,7 +291,7 @@ function StockCollectorPanel() {
           <TableBody>
             {latestDcfFundamentals.length === 0 && (
               <TableRow>
-                <TableCell colSpan={10} className="text-center text-muted-foreground">
+                <TableCell colSpan={11} className="text-center text-muted-foreground">
                   No DCF fundamentals collected yet.
                 </TableCell>
               </TableRow>
@@ -299,6 +301,9 @@ function StockCollectorPanel() {
                 <TableCell>{item.ticker}</TableCell>
                 <TableCell>{item.reference_year}</TableCell>
                 <TableCell>{item.ebit.toFixed(1)}</TableCell>
+                <TableCell>
+                  {item.tax_rate !== null ? `${item.tax_rate.toFixed(1)}%` : "—"}
+                </TableCell>
                 <TableCell>
                   {item.depreciation_amortization?.toFixed(1) ?? "—"}
                 </TableCell>

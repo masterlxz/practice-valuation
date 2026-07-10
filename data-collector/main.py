@@ -113,7 +113,8 @@ def collect_stock_dcf_fundamentals(fundamentals: list[dict]) -> list[dict]:
     conn.executemany(
         "INSERT INTO stock_dcf_fundamentals (ticker, reference_year, ebit, "
         "depreciation_amortization, capex, nwc_change, total_debt, cash, "
-        "shares_outstanding, source, fetched_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        "shares_outstanding, source, fetched_at, tax_rate) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         [
             (
                 r["ticker"],
@@ -127,6 +128,7 @@ def collect_stock_dcf_fundamentals(fundamentals: list[dict]) -> list[dict]:
                 r["shares_outstanding"],
                 "cvm_dfp",
                 now,
+                r["tax_rate"],
             )
             for r in records
         ],
@@ -256,8 +258,10 @@ def main() -> int:
     for item in dcf_fundamentals:
         da = item["depreciation_amortization"]
         capex = item["capex"]
+        tax_rate = item["tax_rate"]
         print(
             f"{item['ticker']}: EBIT {item['ebit']:.1f} / "
+            f"Tax rate {'n/a' if tax_rate is None else f'{tax_rate:.1f}%'} / "
             f"D&A {'n/a' if da is None else f'{da:.1f}'} / "
             f"Capex {'n/a' if capex is None else f'{capex:.1f}'} / "
             f"ΔNWC {item['nwc_change']:.1f} / Debt {item['total_debt']:.1f} / "
