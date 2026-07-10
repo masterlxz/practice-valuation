@@ -30,6 +30,11 @@ type RecordCryptoIndicatorRequest = {
   source: string;
 };
 
+type CollectorSummary = {
+  success: boolean;
+  output: string;
+};
+
 type CryptoIndicatorReading = {
   id: number;
   coin: string;
@@ -91,7 +96,7 @@ function IndicatorTile({
         {INDICATORS[indicatorKey]}
       </p>
       <p className="mt-1 text-2xl font-semibold">
-        {reading ? reading.raw_value : "—"}
+        {reading ? reading.raw_value.toFixed(2) : "—"}
       </p>
       <div className="mt-2 flex items-center justify-between gap-2">
         {reading ? (
@@ -121,6 +126,16 @@ function CryptoScorePanel() {
   const readingsQuery = useQuery<CryptoIndicatorReading[], AppError>({
     queryKey: ["crypto-indicators", coin],
     queryFn: () => invoke("list_crypto_indicators", { coin }),
+  });
+
+  // Only `tvl_trend` is automated so far (DefiLlama, no signup needed) — the
+  // other 8 indicators still go through the manual form below (paid sources
+  // or sources that need investigation, see PROJECT_STATE.md).
+  const runCryptoCollectorMutation = useMutation<CollectorSummary, AppError, void>({
+    mutationFn: () => invoke("run_crypto_collector"),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["crypto-indicators", coin] });
+    },
   });
 
   // One backend call per filled-in indicator — there's no dedicated "batch
@@ -177,6 +192,31 @@ function CryptoScorePanel() {
         <p className="mb-3 text-lg font-medium">
           Green: {greenCount}/9 ({latest.size} of 9 indicators logged)
         </p>
+
+        <div className="mb-4 flex flex-col gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            className="w-fit"
+            onClick={() => runCryptoCollectorMutation.mutate()}
+            disabled={runCryptoCollectorMutation.isPending}
+          >
+            {runCryptoCollectorMutation.isPending
+              ? "Running..."
+              : "Run TVL Trend collector (DefiLlama)"}
+          </Button>
+          {runCryptoCollectorMutation.isSuccess &&
+            !runCryptoCollectorMutation.data.success && (
+              <p className="whitespace-pre-wrap text-red-600">
+                {runCryptoCollectorMutation.data.output}
+              </p>
+            )}
+          {runCryptoCollectorMutation.isError && (
+            <p className="text-red-600">
+              {runCryptoCollectorMutation.error.message}
+            </p>
+          )}
+        </div>
 
         {readingsQuery.isError && (
           <p className="mb-3 text-red-600">{readingsQuery.error.message}</p>

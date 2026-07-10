@@ -29,6 +29,7 @@ pub fn run() {
             commands::valuation::update_valuation,
             commands::valuation::delete_valuation,
             commands::collector::run_stock_collector,
+            commands::collector::run_crypto_collector,
             commands::collector::list_stock_quotes,
             commands::collector::list_stock_fundamentals,
             commands::collector::list_stock_dividends_avg

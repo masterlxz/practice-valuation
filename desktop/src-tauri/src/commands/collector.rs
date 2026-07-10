@@ -19,9 +19,9 @@ pub struct CollectorSummary {
     pub output: String,
 }
 
-#[tauri::command]
-pub async fn run_stock_collector(
-    lock: tauri::State<'_, AtomicBool>,
+async fn run_collector(
+    lock: &AtomicBool,
+    extra_args: &[&str],
 ) -> Result<CollectorSummary, AppError> {
     if lock.swap(true, Ordering::SeqCst) {
         return Err(AppError::CollectorBusy);
@@ -29,6 +29,7 @@ pub async fn run_stock_collector(
 
     let result = Command::new(COLLECTOR_PYTHON)
         .arg(COLLECTOR_SCRIPT)
+        .args(extra_args)
         .output()
         .await;
 
@@ -49,6 +50,20 @@ pub async fn run_stock_collector(
     };
 
     Ok(summary)
+}
+
+#[tauri::command]
+pub async fn run_stock_collector(
+    lock: tauri::State<'_, AtomicBool>,
+) -> Result<CollectorSummary, AppError> {
+    run_collector(&lock, &[]).await
+}
+
+#[tauri::command]
+pub async fn run_crypto_collector(
+    lock: tauri::State<'_, AtomicBool>,
+) -> Result<CollectorSummary, AppError> {
+    run_collector(&lock, &["crypto"]).await
 }
 
 #[tauri::command]

@@ -14,7 +14,7 @@ from pathlib import Path
 import yaml
 from dotenv import load_dotenv
 
-from sources import acoes_bolsai, acoes_brapi
+from sources import acoes_bolsai, acoes_brapi, cripto_defillama
 
 BASE_DIR = Path(__file__).parent
 DB_PATH = BASE_DIR / "practice_valuation.db"
@@ -88,6 +88,66 @@ def collect_stock_dividends_avg(tickers: list[str]) -> list[dict]:
     return dividends
 
 
+def _classify_signal(raw_value: float, green_boundary: float, red_boundary: float) -> str:
+    """Mirrors `src-tauri/src/domain/crypto_score.rs::classify`.
+
+    Duplicated here (not called via Tauri) because Python writes straight to
+    the shared SQLite file with no IPC into Rust — same "no API between the
+    two processes" architecture used for every other collector table. Keep
+    both in sync if the classification rule ever changes.
+    """
+    higher_is_better = green_boundary > red_boundary
+    if higher_is_better:
+        if raw_value >= green_boundary:
+            return "GREEN"
+        if raw_value <= red_boundary:
+            return "RED"
+        return "NEUTRAL"
+    if raw_value <= green_boundary:
+        return "GREEN"
+    if raw_value >= red_boundary:
+        return "RED"
+    return "NEUTRAL"
+
+
+def collect_crypto_tvl_trend() -> dict:
+    conn = sqlite3.connect(DB_PATH)
+    conn.execute("PRAGMA journal_mode=WAL")
+
+    threshold = conn.execute(
+        "SELECT green_boundary, red_boundary FROM indicator_thresholds WHERE indicator = ?",
+        ("tvl_trend",),
+    ).fetchone()
+    if threshold is None:
+        conn.close()
+        raise RuntimeError("No threshold configured for 'tvl_trend' — run migrations first")
+    green_boundary, red_boundary = threshold
+
+    raw_value = cripto_defillama.fetch_tvl_trend_mom()
+    signal = _classify_signal(raw_value, green_boundary, red_boundary)
+    reading_date = datetime.now(timezone.utc).date().isoformat()
+    now = datetime.now(timezone.utc).isoformat()
+
+    conn.execute(
+        "INSERT INTO crypto_indicators "
+        "(coin, indicator, reading_date, raw_value, signal, source, created_at) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?)",
+        ("ETH", "tvl_trend", reading_date, raw_value, signal, "defillama", now),
+    )
+    conn.commit()
+    conn.close()
+
+    return {"indicator": "tvl_trend", "raw_value": raw_value, "signal": signal}
+
+
+def main_crypto() -> int:
+    reading = collect_crypto_tvl_trend()
+    print(
+        f"TVL Trend (MoM): {reading['raw_value']:.2f}% -> {reading['signal']}"
+    )
+    return 0
+
+
 def main() -> int:
     load_dotenv(BASE_DIR / ".env")
     config = load_config()
@@ -124,4 +184,6 @@ def main() -> int:
 
 
 if __name__ == "__main__":
+    if len(sys.argv) > 1 and sys.argv[1] == "crypto":
+        sys.exit(main_crypto())
     sys.exit(main())
