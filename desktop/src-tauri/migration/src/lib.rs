@@ -12,6 +12,7 @@ mod m20260709_232211_create_stock_quotes;
 mod m20260710_115333_create_stock_fundamentals_and_dividends;
 mod m20260710_132548_create_stock_dcf_fundamentals;
 mod m20260710_134142_add_tax_rate_to_stock_dcf_fundamentals;
+mod m20260710_220000_rename_avg_dividend5y_column;
 
 pub struct Migrator;
 
@@ -31,6 +32,7 @@ impl MigratorTrait for Migrator {
             Box::new(m20260710_115333_create_stock_fundamentals_and_dividends::Migration),
             Box::new(m20260710_132548_create_stock_dcf_fundamentals::Migration),
             Box::new(m20260710_134142_add_tax_rate_to_stock_dcf_fundamentals::Migration),
+            Box::new(m20260710_220000_rename_avg_dividend5y_column::Migration),
         ]
     }
 }

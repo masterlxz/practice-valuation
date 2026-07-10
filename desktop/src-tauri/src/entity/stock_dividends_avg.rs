@@ -10,7 +10,7 @@ pub struct Model {
     pub id: i32,
     pub ticker: String,
     #[sea_orm(column_type = "Double")]
-    pub avg_dividend5y: f64,
+    pub avg_dividend_5y: f64,
     pub source: String,
     pub fetched_at: String,
 }

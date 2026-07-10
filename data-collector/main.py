@@ -14,7 +14,14 @@ from pathlib import Path
 import yaml
 from dotenv import load_dotenv
 
-from sources import acoes_bolsai, acoes_brapi, cripto_defillama, cripto_ultrasound, cvm_dfp
+from sources import (
+    acoes_bolsai,
+    acoes_brapi,
+    acoes_yahoo,
+    cripto_defillama,
+    cripto_ultrasound,
+    cvm_dfp,
+)
 
 BASE_DIR = Path(__file__).parent
 DB_PATH = BASE_DIR / "practice_valuation.db"
@@ -72,7 +79,7 @@ def collect_stock_dividends_avg(tickers: list[str]) -> list[dict]:
     if not tickers:
         return []
 
-    dividends = acoes_bolsai.fetch_dividends_avg(tickers)
+    dividends = acoes_yahoo.fetch_dividends_avg(tickers)
 
     conn = sqlite3.connect(DB_PATH)
     conn.execute("PRAGMA journal_mode=WAL")
@@ -80,7 +87,10 @@ def collect_stock_dividends_avg(tickers: list[str]) -> list[dict]:
     conn.executemany(
         "INSERT INTO stock_dividends_avg (ticker, avg_dividend_5y, source, fetched_at) "
         "VALUES (?, ?, ?, ?)",
-        [(item["ticker"], item["avg_dividend_5y"], "bolsai", now) for item in dividends],
+        [
+            (item["ticker"], item["avg_dividend_5y"], "yahoo_finance", now)
+            for item in dividends
+        ],
     )
     conn.commit()
     conn.close()
@@ -243,16 +253,13 @@ def main() -> int:
     if not fundamentals:
         return 0
 
-    # Dividends is known to 403 on the free bolsai plan (see acoes_bolsai.py)
-    # — isolated in its own try/except so that expected failure doesn't
-    # block the DCF collection below, which only depends on `fundamentals`.
-    try:
-        dividends = collect_stock_dividends_avg(tickers)
-        for item in dividends:
-            print(f"{item['ticker']}: avg dividend/share (5y) R$ {item['avg_dividend_5y']:.4f}")
-        print(f"Updated {len(dividends)} dividend average record(s)")
-    except RuntimeError as err:
-        print(f"Skipping bolsai dividends collection: {err}")
+    # Yahoo Finance's chart API already skips failing/dividend-less tickers
+    # internally (see acoes_yahoo.py) — no try/except needed here, unlike
+    # the bolsai calls above.
+    dividends = collect_stock_dividends_avg(tickers)
+    for item in dividends:
+        print(f"{item['ticker']}: avg dividend/share (5y) R$ {item['avg_dividend_5y']:.4f}")
+    print(f"Updated {len(dividends)} dividend average record(s)")
 
     dcf_fundamentals = collect_stock_dcf_fundamentals(fundamentals)
     for item in dcf_fundamentals:
