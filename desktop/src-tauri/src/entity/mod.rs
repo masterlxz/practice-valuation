@@ -11,6 +11,7 @@ pub mod graham_inputs;
 pub mod indicator_thresholds;
 pub mod projected_ceiling_inputs;
 pub mod rnav_inputs;
+pub mod stock_dcf_fundamentals;
 pub mod stock_dividends_avg;
 pub mod stock_fundamentals;
 pub mod stock_quotes;

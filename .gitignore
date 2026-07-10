@@ -18,6 +18,9 @@ __pycache__/
 .venv/
 venv/
 
+# downloaded/cached data (large, regenerable)
+data-collector/.cache/
+
 # node
 node_modules/
 

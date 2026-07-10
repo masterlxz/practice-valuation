@@ -14,7 +14,7 @@ from pathlib import Path
 import yaml
 from dotenv import load_dotenv
 
-from sources import acoes_bolsai, acoes_brapi, cripto_defillama, cripto_ultrasound
+from sources import acoes_bolsai, acoes_brapi, cripto_defillama, cripto_ultrasound, cvm_dfp
 
 BASE_DIR = Path(__file__).parent
 DB_PATH = BASE_DIR / "practice_valuation.db"
@@ -86,6 +86,55 @@ def collect_stock_dividends_avg(tickers: list[str]) -> list[dict]:
     conn.close()
 
     return dividends
+
+
+def collect_stock_dcf_fundamentals(fundamentals: list[dict]) -> list[dict]:
+    """Recebe a lista já buscada por `collect_stock_fundamentals` (que já
+    inclui `cvm_code` e `shares_outstanding`, ver `acoes_bolsai.py`) e
+    completa com os campos vindos da CVM (EBIT, D&A, Capex, ΔNWC, dívida,
+    caixa). `shares_outstanding` vem da bolsai, não da CVM — ver nota em
+    `cvm_dfp.py`.
+    """
+    ticker_cvm_codes = {f["ticker"]: f["cvm_code"] for f in fundamentals}
+    if not ticker_cvm_codes:
+        return []
+
+    shares_outstanding_millions = {
+        f["ticker"]: f["shares_outstanding"] / 1_000_000 for f in fundamentals
+    }
+
+    records = cvm_dfp.fetch_dcf_fundamentals(ticker_cvm_codes)
+    for record in records:
+        record["shares_outstanding"] = shares_outstanding_millions[record["ticker"]]
+
+    conn = sqlite3.connect(DB_PATH)
+    conn.execute("PRAGMA journal_mode=WAL")
+    now = datetime.now(timezone.utc).isoformat()
+    conn.executemany(
+        "INSERT INTO stock_dcf_fundamentals (ticker, reference_year, ebit, "
+        "depreciation_amortization, capex, nwc_change, total_debt, cash, "
+        "shares_outstanding, source, fetched_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        [
+            (
+                r["ticker"],
+                r["reference_year"],
+                r["ebit"],
+                r["depreciation_amortization"],
+                r["capex"],
+                r["nwc_change"],
+                r["total_debt"],
+                r["cash"],
+                r["shares_outstanding"],
+                "cvm_dfp",
+                now,
+            )
+            for r in records
+        ],
+    )
+    conn.commit()
+    conn.close()
+
+    return records
 
 
 def _classify_signal(raw_value: float, green_boundary: float, red_boundary: float) -> str:
@@ -175,8 +224,9 @@ def main() -> int:
     print(f"Updated {len(quotes)} quote(s)")
 
     # bolsai requires a signed-up API key (unlike brapi's test tickers) — if
-    # it's missing, skip this source with a clear message instead of failing
-    # the whole run and losing the quotes collected above.
+    # it's missing, skip everything that depends on it (dividends, DCF via
+    # cvm_code) instead of failing the whole run and losing the quotes
+    # collected above.
     try:
         fundamentals = collect_stock_fundamentals(tickers)
         for item in fundamentals:
@@ -184,13 +234,36 @@ def main() -> int:
                 f"{item['ticker']}: LPA {item['lpa']} / VPA {item['vpa']} / ROE {item['roe']}%"
             )
         print(f"Updated {len(fundamentals)} fundamentals record(s)")
+    except RuntimeError as err:
+        print(f"Skipping bolsai collection: {err}")
+        fundamentals = []
 
+    if not fundamentals:
+        return 0
+
+    # Dividends is known to 403 on the free bolsai plan (see acoes_bolsai.py)
+    # — isolated in its own try/except so that expected failure doesn't
+    # block the DCF collection below, which only depends on `fundamentals`.
+    try:
         dividends = collect_stock_dividends_avg(tickers)
         for item in dividends:
             print(f"{item['ticker']}: avg dividend/share (5y) R$ {item['avg_dividend_5y']:.4f}")
         print(f"Updated {len(dividends)} dividend average record(s)")
     except RuntimeError as err:
-        print(f"Skipping bolsai collection: {err}")
+        print(f"Skipping bolsai dividends collection: {err}")
+
+    dcf_fundamentals = collect_stock_dcf_fundamentals(fundamentals)
+    for item in dcf_fundamentals:
+        da = item["depreciation_amortization"]
+        capex = item["capex"]
+        print(
+            f"{item['ticker']}: EBIT {item['ebit']:.1f} / "
+            f"D&A {'n/a' if da is None else f'{da:.1f}'} / "
+            f"Capex {'n/a' if capex is None else f'{capex:.1f}'} / "
+            f"ΔNWC {item['nwc_change']:.1f} / Debt {item['total_debt']:.1f} / "
+            f"Cash {item['cash']:.1f} (R$ millions)"
+        )
+    print(f"Updated {len(dcf_fundamentals)} DCF fundamentals record(s)")
 
     return 0
 

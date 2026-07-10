@@ -32,7 +32,8 @@ pub fn run() {
             commands::collector::run_crypto_collector,
             commands::collector::list_stock_quotes,
             commands::collector::list_stock_fundamentals,
-            commands::collector::list_stock_dividends_avg
+            commands::collector::list_stock_dividends_avg,
+            commands::collector::list_stock_dcf_fundamentals
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

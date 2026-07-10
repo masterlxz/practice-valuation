@@ -46,10 +46,17 @@ def _headers() -> dict:
 
 
 def fetch_fundamentals(tickers: list[str]) -> list[dict]:
-    """Busca LPA, VPA e ROE atuais de uma lista de tickers.
+    """Busca LPA, VPA, ROE, nº de ações e o código CVM atuais de uma lista de tickers.
 
-    Retorna uma lista de {"ticker": str, "lpa": float, "vpa": float, "roe": float}.
-    Um ticker que falhar (404, etc.) é ignorado — não derruba o restante.
+    Retorna uma lista de {"ticker": str, "lpa": float, "vpa": float,
+    "roe": float, "shares_outstanding": float, "cvm_code": str}. Um ticker
+    que falhar (404, etc.) é ignorado — não derruba o restante. `cvm_code` é
+    reaproveitado por `cvm_dfp.py` (Sessão 5) pra filtrar os dados abertos da
+    CVM sem precisar de uma segunda chamada só pra resolver ticker → empresa.
+    `shares_outstanding` também é usado pelo DCF — a CVM tem um campo
+    equivalente (`composicao_capital`), mas testando contra a VALE3 real ele
+    veio com um erro de escala (1000x menor) específico daquela companhia;
+    o da bolsai já vem conferido, então é o que o DCF usa.
     """
     headers = _headers()
     results = []
@@ -71,6 +78,8 @@ def fetch_fundamentals(tickers: list[str]) -> list[dict]:
                 "lpa": payload["lpa"],
                 "vpa": payload["vpa"],
                 "roe": payload["roe"],
+                "shares_outstanding": payload["shares_outstanding"],
+                "cvm_code": payload["cvm_code"],
             }
         )
 

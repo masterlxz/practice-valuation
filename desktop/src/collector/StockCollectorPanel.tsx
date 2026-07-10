@@ -48,6 +48,21 @@ type StockDividendsAvg = {
   fetched_at: string;
 };
 
+type StockDcfFundamentals = {
+  id: number;
+  ticker: string;
+  reference_year: number;
+  ebit: number;
+  depreciation_amortization: number | null;
+  capex: number | null;
+  nwc_change: number;
+  total_debt: number;
+  cash: number;
+  shares_outstanding: number;
+  source: string;
+  fetched_at: string;
+};
+
 // `list_stock_*` commands order by fetched_at desc, so the first row seen
 // per ticker while iterating is the latest one — same pattern used for
 // crypto readings and saved valuations.
@@ -89,12 +104,18 @@ function StockCollectorPanel() {
     queryFn: () => invoke("list_stock_dividends_avg"),
   });
 
+  const dcfFundamentalsQuery = useQuery<StockDcfFundamentals[], AppError>({
+    queryKey: ["stock-dcf-fundamentals"],
+    queryFn: () => invoke("list_stock_dcf_fundamentals"),
+  });
+
   const runMutation = useMutation<CollectorSummary, AppError, void>({
     mutationFn: () => invoke("run_stock_collector"),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["stock-quotes"] });
       queryClient.invalidateQueries({ queryKey: ["stock-fundamentals"] });
       queryClient.invalidateQueries({ queryKey: ["stock-dividends-avg"] });
+      queryClient.invalidateQueries({ queryKey: ["stock-dcf-fundamentals"] });
     },
   });
 
@@ -105,6 +126,9 @@ function StockCollectorPanel() {
   const latestDividendsAvg = [
     ...latestPerTicker(dividendsAvgQuery.data ?? []).values(),
   ];
+  const latestDcfFundamentals = [
+    ...latestPerTicker(dcfFundamentalsQuery.data ?? []).values(),
+  ];
 
   return (
     <Card>
@@ -114,12 +138,16 @@ function StockCollectorPanel() {
       <CardContent className="flex flex-col gap-4">
         <p className="text-sm text-muted-foreground">
           Runs the Python collector (brapi for quotes, bolsai for fundamentals
-          and dividends) for the tickers configured in{" "}
-          <code>data-collector/config.yaml</code> and saves each reading as a
-          new row — nothing is overwritten. Bolsai requires{" "}
-          <code>BOLSAI_API_KEY</code> in <code>data-collector/.env</code>; if
-          it's missing, quotes still update and the fundamentals/dividends
-          tables below stay empty.
+          and dividends, CVM's open data for DCF fundamentals) for the
+          tickers configured in <code>data-collector/config.yaml</code> and
+          saves each reading as a new row — nothing is overwritten. Bolsai
+          requires <code>BOLSAI_API_KEY</code> in{" "}
+          <code>data-collector/.env</code>; if it's missing, quotes still
+          update and the tables below stay empty. DCF fundamentals depend on
+          bolsai's fundamentals lookup, not on your own API key/signup for
+          CVM (no key needed) — D&A/Capex show "—" when the account
+          couldn't be matched confidently for that company (see
+          <code> cvm_dfp.py</code>).
         </p>
 
         <Button
@@ -233,6 +261,52 @@ function StockCollectorPanel() {
                 <TableCell>{item.ticker}</TableCell>
                 <TableCell>R$ {item.avg_dividend_5y.toFixed(4)}</TableCell>
                 <TableCell>{item.source}</TableCell>
+                <TableCell>{formatDateTime(item.fetched_at)}</TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+
+        <h3 className="text-sm font-medium">DCF fundamentals (CVM)</h3>
+        {dcfFundamentalsQuery.isError && (
+          <p className="text-red-600">{dcfFundamentalsQuery.error.message}</p>
+        )}
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Ticker</TableHead>
+              <TableHead>Ref. year</TableHead>
+              <TableHead>EBIT</TableHead>
+              <TableHead>D&amp;A</TableHead>
+              <TableHead>Capex</TableHead>
+              <TableHead>ΔNWC</TableHead>
+              <TableHead>Total debt</TableHead>
+              <TableHead>Cash</TableHead>
+              <TableHead>Shares outstanding</TableHead>
+              <TableHead>Fetched at</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {latestDcfFundamentals.length === 0 && (
+              <TableRow>
+                <TableCell colSpan={10} className="text-center text-muted-foreground">
+                  No DCF fundamentals collected yet.
+                </TableCell>
+              </TableRow>
+            )}
+            {latestDcfFundamentals.map((item) => (
+              <TableRow key={item.ticker}>
+                <TableCell>{item.ticker}</TableCell>
+                <TableCell>{item.reference_year}</TableCell>
+                <TableCell>{item.ebit.toFixed(1)}</TableCell>
+                <TableCell>
+                  {item.depreciation_amortization?.toFixed(1) ?? "—"}
+                </TableCell>
+                <TableCell>{item.capex?.toFixed(1) ?? "—"}</TableCell>
+                <TableCell>{item.nwc_change.toFixed(1)}</TableCell>
+                <TableCell>{item.total_debt.toFixed(1)}</TableCell>
+                <TableCell>{item.cash.toFixed(1)}</TableCell>
+                <TableCell>{item.shares_outstanding.toFixed(1)}</TableCell>
                 <TableCell>{formatDateTime(item.fetched_at)}</TableCell>
               </TableRow>
             ))}
