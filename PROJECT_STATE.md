@@ -2,7 +2,7 @@
 
 > Este arquivo é o centro de controle do projeto. Atualizado a cada sessão de trabalho.
 > Pode ser lido por qualquer instância do Claude Code em qualquer máquina para retomar o contexto.
-> Última atualização: 2026-07-09 (Sessão 4, fim — Fase 3 completa (7 modelos + score cripto), Fase 4 avançada (Saved Valuations completo com edição/exclusão em lugar, tudo vestido com shadcn/ui, identidade visual dark+verde, layout em grid), mensagens de guarda corrigidas, e Fase 2 iniciada (cotação via brapi rodando ponta a ponta). Retomar por "Pendências pra próxima sessão", item 1)
+> Última atualização: 2026-07-10 (Sessão 5, fim — Fase 2 avançada: fundamentos via bolsai (LPA, VPA, ROE) rodando ponta a ponta pra Graham/Bancos; dividendo médio do Bazin descoberto como exclusivo do plano Pro da bolsai, adiado por decisão do usuário. Retomar por "Pendências pra próxima sessão", item 1)
 
 ---
 
@@ -79,7 +79,7 @@ Substitui a ideia original de planilha (ver Fase 2, histórico) por um app com b
 ```
 Fase 0 — Fundamentos & Decisões de Arquitetura   [~] Em andamento (0.1–0.5 ✓, falta 0.6)
 Fase 1 — Modelo de Dados (schema do banco local)  [~] Em andamento (migrations rodando normalmente a cada modelo, falta só formalizar 1.3 como concluída)
-Fase 2 — Coleta de Dados (ações BR + cripto)      [~] Em andamento (cotação via brapi funcionando ponta a ponta; fundamentos via CVM, bolsai e as fontes de cripto ainda faltam)
+Fase 2 — Coleta de Dados (ações BR + cripto)      [~] Em andamento (cotação via brapi e fundamentos LPA/VPA/ROE via bolsai funcionando ponta a ponta; dividendo médio do Bazin bloqueado no plano free da bolsai — ver Log de Sessões; CVM e fontes de cripto ainda faltam)
 Fase 3 — Motor de Cálculo (preço-teto/valuation)  [x] Completa — 7 modelos de ação + score cripto (9 indicadores), todos ponta a ponta
 Fase 4 — Interface Desktop                        [~] Em andamento (shadcn/ui + TanStack Table instalados, tela de valuations salvos completa incl. detalhe fino de premissas, 7 formulários + painel cripto vestidos, identidade visual dark+verde definida)
 Fase 5 — Monitoramento & Alertas                  [ ] Não iniciada
@@ -236,7 +236,7 @@ Pra maioria das empresas "normais" (o grosso da lista), esse caminho sozinho já
   - Frontend: enquanto roda, mostra spinner; ao terminar, mostra um resumo (quantos ativos, sucesso/erro) — sem log ao vivo linha a linha por enquanto (pode vir depois se sentir falta)
   - **Guarda contra clique duplo/spam**: desabilitar o botão no frontend enquanto roda **e** ter uma trava no lado Rust (ex: `Mutex`/flag no estado do app) que recusa uma segunda chamada concorrente mesmo se disparada rápido demais — evita dois processos Python escrevendo no mesmo SQLite ao mesmo tempo e evita estourar rate limit das APIs gratuitas
   - A Fase 5 (alertas) pode um dia precisar de checagem periódica dos indicadores **já salvos** — isso é diferente de "puxar dado novo" e fica pra quando chegarmos lá
-- [~] 2.2 — Implementar clientes de fonte de dados de ações — **`acoes_brapi.py` (cotação) concluído na Sessão 4**; `acoes_bolsai.py` (fundamentos) e `cvm_dfp.py` (fundamentos via zip, mais complexo) ainda faltam
+- [~] 2.2 — Implementar clientes de fonte de dados de ações — **`acoes_brapi.py` (cotação) concluído na Sessão 4**; **`acoes_bolsai.py` (fundamentos LPA/VPA/ROE) concluído na Sessão 5** — dividendo médio (Bazin) fica de fora por enquanto, exclusivo do plano Pro da bolsai (ver Log de Sessões); `cvm_dfp.py` (fundamentos via zip, mais complexo) ainda falta
 - [ ] 2.3 — Implementar clientes de fonte de dados de cripto (`cripto_coingecko.py`, `cripto_defillama.py`, `cripto_ultrasound.py`, `cripto_etherscan.py`, `cripto_stakingrewards.py`)
 - [ ] 2.4 — Fallback de extração via PDF (`pdf_extractor.py` — pdfplumber + Claude), quando necessário
 
@@ -628,8 +628,20 @@ Diferente de ação (1x/ano), aqui é um **score contínuo**: cada indicador vir
   - `cargo check`, `cargo test --lib` (32 testes, nada quebrou — a lógica de cálculo em si não mudou) e `npx tsc --noEmit` limpos. Smoke test real — **usuário confirmou visualmente que editar atualiza a mesma linha (não cria nova) e que excluir remove de vez** ("sim deu certo")
 - **Marco**: Saved Valuations completo — lista, detalhe/comparação, premissas, edição e exclusão. Fase 4 não tem mais pendência conhecida além de 4.4 (alertas, depende da Fase 5)
 
+### 2026-07-10 — Sessão 5
+
+- **Continuação da Fase 2 (fundamentos via bolsai, usuário escolheu "bolsai, é mais simples que a CVM")**: documentação real verificada via `WebFetch`/`curl` em usebolsai.com/docs (não por memória) antes de codar, mesmo padrão da brapi. Achado logo de cara: bolsai **exige cadastro** (login Google no dashboard pra gerar `X-API-Key`) — diferente da brapi, não tem ticker de teste sem chave. Usuário gerou a chave na hora
+- Consultado o usuário sobre escopo antes de decidir sozinho (regra do arquivo): **narrow scope** escolhido — só os campos que os formulários já pedem à mão hoje (LPA/VPA pro Graham, ROE pros Bancos, via `GET /fundamentals/{ticker}`) e o dividendo médio 5 anos do Bazin (via `GET /dividends/{ticker}`) — não a tabela completa de ~27 indicadores
+- **Schema**: duas tabelas novas, mesmo molde de `stock_quotes` (série temporal, nunca sobrescrita) — `stock_fundamentals` (`ticker`, `lpa`, `vpa`, `roe`, `source`, `fetched_at`) e `stock_dividends_avg` (`ticker`, `avg_dividend_5y`, `source`, `fetched_at`). Migration gerada via `sea-orm-cli migrate generate`, aplicada (`migrate up`) e entities geradas (`generate entity`), mesmo fluxo já documentado (`chown -R 1000:1000` depois de cada comando gerado dentro do container)
+- **Python**: `data-collector/sources/acoes_bolsai.py` — `fetch_fundamentals` (LPA/VPA/ROE) e `fetch_dividends_avg` (média dos últimos 5 anos **completos**, descartando o ano corrente parcial do `annual_summary` pra não puxar a média pra baixo sem motivo). `main.py` passou a chamar as duas depois da cotação, sempre gravando linha nova
+- **Achado testando contra a API real** (não coberto pela primeira leitura da doc): `GET /dividends/{ticker}` devolve **403 Forbidden** — é endpoint exclusivo do plano Pro (R$49/mês; a doc marca isso com uma badge "PRO" no menu lateral, só percebida na segunda passada). Apresentadas 3 opções ao usuário (entregar só o que funciona / investigar brapi com token / assinar o Pro) — **escolhida "entregar só o que já funciona"**. `fetch_dividends_avg` trata o 403 como `RuntimeError` (mesmo tratamento já usado pra chave ausente), `main.py` pula essa coleta sem derrubar cotação/fundamentos. Dividendo médio do Bazin **continua manual** até o usuário decidir diferente
+- **Rust**: `list_stock_fundamentals`/`list_stock_dividends_avg` em `commands/collector.rs`, mesmo molde de `list_stock_quotes` — sem `AppError` novo, sem mudança em `domain/`
+- **Frontend**: `StockCollectorPanel.tsx` ganhou duas tabelas novas (Fundamentals, Average dividend) com o mesmo padrão "última leitura por ticker" já usado pra cotação; texto do card atualizado explicando que bolsai exige `BOLSAI_API_KEY` e que a tabela de dividendo fica vazia até isso mudar
+- `cargo check`, `cargo test --lib` (32 testes, nada quebrou) e `npx tsc --noEmit` limpos. Coletor rodado de verdade (`docker compose run ... .venv/bin/python3 main.py`) contra a API real **antes** de plugar no botão — confirmou LPA/VPA/ROE reais gravados pros 4 tickers de config, saída limpa (`exit code 0`) mesmo com o bloqueio de dividendos. App subido via `dev.sh`, smoke test real na tela — **usuário confirmou visualmente que o botão busca os dados e populam as duas tabelas novas** ("deu boa")
+- **Marco**: Fase 2 ganha sua segunda fonte ponta a ponta (bolsai, fundamentos). Padrão Python → Rust subprocess → tela seguiu firme pela segunda vez; a lição nova desta sessão foi "ler a doc de novo depois do primeiro 403" — a badge PRO estava lá, só não foi vista na primeira passada
+
 **Pendências pra próxima sessão** (em ordem):
-1. Fase 2, continuação: próxima fonte de dado (CVM — fundamentos pro DCF/RNAV/Bancos, mais complexa: zip anual + parsing de CSV — ou bolsai/cripto) — ver o "Log de Sessões" acima pro padrão já estabelecido (Python client → Rust subprocess command → tela)
+1. Fase 2, continuação: escolher a próxima frente — **CVM** (fundamentos pro DCF/RNAV/Bancos, mais complexa: zip anual + parsing de CSV), **cripto** (CoinGecko/DefiLlama/etc.), ou revisitar o **dividendo médio do Bazin** (investigar brapi com token grátis, ou decidir assinar bolsai Pro — ver Log de Sessões, Sessão 5)
 2. README.md e LICENSE na raiz do repo ainda não existem (Fase 0.5/6.2/6.3) — usuário disse que prefere esperar ter mais "repertório" antes de escrever o README
 3. Quando o usuário voltar a mexer no TruthID mobile, lembrar que o cache Docker foi limpo (Sessão 1 do Practice Valuation) — primeiro `docker compose up` de lá vai ser mais lento
 4. Se algum dia migrar a imagem Docker (Node/Debian), lembrar dos 3 fixes de rede/instalação da Sessão 1 (IPv6, npm audit, node_modules corrompido) — não são óbvios

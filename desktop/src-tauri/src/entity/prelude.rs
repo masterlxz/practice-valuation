@@ -9,5 +9,7 @@ pub use super::graham_inputs::Entity as GrahamInputs;
 pub use super::indicator_thresholds::Entity as IndicatorThresholds;
 pub use super::projected_ceiling_inputs::Entity as ProjectedCeilingInputs;
 pub use super::rnav_inputs::Entity as RnavInputs;
+pub use super::stock_dividends_avg::Entity as StockDividendsAvg;
+pub use super::stock_fundamentals::Entity as StockFundamentals;
 pub use super::stock_quotes::Entity as StockQuotes;
 pub use super::valuation::Entity as Valuation;

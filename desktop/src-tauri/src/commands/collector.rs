@@ -4,7 +4,7 @@ use sea_orm::{DatabaseConnection, EntityTrait, QueryOrder};
 use serde::Serialize;
 use tokio::process::Command;
 
-use crate::entity::stock_quotes;
+use crate::entity::{stock_dividends_avg, stock_fundamentals, stock_quotes};
 use crate::error::AppError;
 
 // Dev-only paths — the venv and script live in the data-collector/ bind
@@ -61,4 +61,28 @@ pub async fn list_stock_quotes(
         .await?;
 
     Ok(quotes)
+}
+
+#[tauri::command]
+pub async fn list_stock_fundamentals(
+    db: tauri::State<'_, DatabaseConnection>,
+) -> Result<Vec<stock_fundamentals::Model>, AppError> {
+    let fundamentals = stock_fundamentals::Entity::find()
+        .order_by_desc(stock_fundamentals::Column::FetchedAt)
+        .all(db.inner())
+        .await?;
+
+    Ok(fundamentals)
+}
+
+#[tauri::command]
+pub async fn list_stock_dividends_avg(
+    db: tauri::State<'_, DatabaseConnection>,
+) -> Result<Vec<stock_dividends_avg::Model>, AppError> {
+    let dividends = stock_dividends_avg::Entity::find()
+        .order_by_desc(stock_dividends_avg::Column::FetchedAt)
+        .all(db.inner())
+        .await?;
+
+    Ok(dividends)
 }

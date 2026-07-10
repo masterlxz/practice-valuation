@@ -9,6 +9,7 @@ mod m20260709_160307_create_rnav_inputs;
 mod m20260709_160929_create_projected_ceiling_inputs;
 mod m20260709_212958_create_crypto_score_tables;
 mod m20260709_232211_create_stock_quotes;
+mod m20260710_115333_create_stock_fundamentals_and_dividends;
 
 pub struct Migrator;
 
@@ -25,6 +26,7 @@ impl MigratorTrait for Migrator {
             Box::new(m20260709_160929_create_projected_ceiling_inputs::Migration),
             Box::new(m20260709_212958_create_crypto_score_tables::Migration),
             Box::new(m20260709_232211_create_stock_quotes::Migration),
+            Box::new(m20260710_115333_create_stock_fundamentals_and_dividends::Migration),
         ]
     }
 }
