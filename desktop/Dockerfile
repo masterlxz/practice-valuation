@@ -21,11 +21,19 @@ RUN apt-get update && apt-get install -y \
 # Instala Rust dentro do container
 RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain stable
 ENV PATH="/root/.cargo/bin:${PATH}"
+ENV RUSTUP_HOME=/root/.rustup CARGO_HOME=/root/.cargo HOME=/root
 
 # sea-orm-cli: ferramenta de dev pra gerar migrations/entities do banco (SeaORM).
 # Não é dependência do projeto (isso já está no Cargo.toml) — fica só no ambiente,
 # igual o próprio cargo/rustc.
 RUN cargo install sea-orm-cli
+
+# node:20 já cria um usuário "node" (uid/gid 1000, mesmo do host) — é ele que
+# roda o app em runtime (docker-compose.yml: user: "1000:1000"), necessário pra
+# autenticação D-Bus da notificação nativa (Fase 5.3), que valida a credencial
+# real do processo (SO_PEERCRED), diferente do X11 que autentica só por cookie.
+# Libera leitura/execução do toolchain instalado como root pra esse usuário.
+RUN chmod 755 /root && chmod -R a+rX /root/.cargo /root/.rustup
 
 # Python + venv, pra rodar o coletor de dados (../data-collector) chamado pelo app
 RUN apt-get update && apt-get install -y \

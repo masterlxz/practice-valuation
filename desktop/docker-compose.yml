@@ -5,17 +5,20 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+    user: "1000:1000"                             # mesmo uid do host (node:20 já tem esse usuário) — exigido pela autenticação D-Bus da notificação nativa (Fase 5.3)
     volumes:
       - .:/app                                  # código fonte do app (Tauri + React)
       - ../data-collector:/data-collector        # coletor Python — caminho fixo que o Rust vai chamar (Fase 2)
       - /tmp/.X11-unix:/tmp/.X11-unix           # display do Linux (para a janela aparecer)
       - ${XAUTHORITY:-${HOME}/.Xauthority}:/root/.Xauthority:ro  # cookie de auth X11
+      - ${XDG_RUNTIME_DIR:-/run/user/1000}/bus:/run/user/1000/bus  # socket D-Bus do host (Fase 5.3, notificação nativa)
       - cargo-registry:/root/.cargo/registry    # cache de pacotes Rust
       - cargo-git:/root/.cargo/git              # cache de pacotes Rust (git)
       - cargo-target:/app/src-tauri/target      # cache de compilação Rust (o mais pesado)
     environment:
       - DISPLAY=${DISPLAY}                      # qual tela usar (herdado do host)
       - XAUTHORITY=/root/.Xauthority            # cookie de auth X11
+      - DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/1000/bus  # onde o D-Bus foi montado dentro do container
       - WEBKIT_DISABLE_DMABUF_RENDERER=1        # evita GPU hang no i915 com XWayland
       - WEBKIT_DISABLE_COMPOSITING_MODE=1        # fallback: desativa compositing de GPU no WebKit
       - NODE_OPTIONS=--dns-result-order=ipv4first  # sem isso o Node tenta IPv6 primeiro e trava (IPv6 não roteia aqui), demorando minutos até cair pro IPv4

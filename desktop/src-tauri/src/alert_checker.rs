@@ -2,6 +2,7 @@ use std::collections::HashMap;
 use std::time::Duration;
 
 use sea_orm::{ActiveModelTrait, ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter, QueryOrder, Set};
+use tauri_plugin_notification::NotificationExt;
 
 use crate::domain::alert_check;
 use crate::entity::{alert_event, alert_rule, crypto_indicators, stock_quotes, valuation};
@@ -44,7 +45,7 @@ fn evaluate_crypto_rule(
 /// the DB (never triggers the Python collector itself — Fase 5.2 is purely
 /// "check what's there"), appending a new `alert_event` row only when a
 /// rule's triggered state flips, in either direction.
-pub async fn check_active_rules(db: &DatabaseConnection) -> Result<(), AppError> {
+pub async fn check_active_rules(app: &tauri::AppHandle, db: &DatabaseConnection) -> Result<(), AppError> {
     let rules = alert_rule::Entity::find()
         .filter(alert_rule::Column::IsActive.eq(true))
         .all(db)
@@ -122,6 +123,18 @@ pub async fn check_active_rules(db: &DatabaseConnection) -> Result<(), AppError>
             .unwrap_or(false);
 
         if is_triggered != previously_triggered {
+            if is_triggered {
+                if let Err(err) = app
+                    .notification()
+                    .builder()
+                    .title("Practice Valuation")
+                    .body(&message)
+                    .show()
+                {
+                    eprintln!("failed to show notification: {err}");
+                }
+            }
+
             alert_event::ActiveModel {
                 alert_rule_id: Set(rule.id),
                 is_triggered: Set(is_triggered),
@@ -137,12 +150,12 @@ pub async fn check_active_rules(db: &DatabaseConnection) -> Result<(), AppError>
     Ok(())
 }
 
-pub fn spawn_periodic_check(db: DatabaseConnection) {
+pub fn spawn_periodic_check(app: tauri::AppHandle, db: DatabaseConnection) {
     tauri::async_runtime::spawn(async move {
         let mut ticker = tokio::time::interval(CHECK_INTERVAL);
         loop {
             ticker.tick().await;
-            if let Err(err) = check_active_rules(&db).await {
+            if let Err(err) = check_active_rules(&app, &db).await {
                 eprintln!("alert check failed: {err}");
             }
         }
