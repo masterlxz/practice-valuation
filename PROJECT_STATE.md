@@ -2,7 +2,7 @@
 
 > Este arquivo é o centro de controle do projeto. Atualizado a cada sessão de trabalho.
 > Pode ser lido por qualquer instância do Claude Code em qualquer máquina para retomar o contexto.
-> Última atualização: 2026-07-10 (Sessão 6, fim — `staking_yield` via stakingrewards.com investigado e descartado (sem free tier de verdade, código revertido). **Dividendo médio do Bazin automatizado via Yahoo Finance** (API não-oficial, `acoes_yahoo.py`), resolvendo pra qualquer ticker real, não só demo — pendência da Sessão 5 fechada. De quebra, corrigido um bug latente de nomenclatura (`avg_dividend5y` vs `avg_dividend_5y`) que fazia a coluna do banco, o entity Rust e o frontend não baterem, nunca antes exercitado por falta de dado real. Fase 2 sem pendências de dado com caminho conhecido — retomar por "Pendências pra próxima sessão", item 2 (README/LICENSE))
+> Última atualização: 2026-07-11 (Sessão 7, fim — **Fase 5.1 completa**: cadastro de regra de alerta (`alert_rule`, tabela polimórfica via `target_type`), planejado com `/plan` por atravessar as 3 camadas (migration/entity/comando Rust + painel React). Duas decisões de design validadas com o usuário antes de codar: alerta de ação reusa o `fair_price` já calculado numa valuation salva (não pede preço-alvo novo); alerta de cripto reusa o signal GREEN/RED já calculado via `indicator_thresholds` (não pede faixa numérica nova). `cargo check`/`cargo test --lib` (32 testes) e `npx tsc --noEmit` limpos; usuário testou a aba "Alerts" de verdade — criar/listar/pausar/retomar/apagar pros dois tipos de alerta, confirmou que funcionou. Falta 5.2 (verificação periódica) e 5.3 (notificação) — nenhuma das duas foi escopo desta sessão.)
 
 ---
 
@@ -82,7 +82,7 @@ Fase 1 — Modelo de Dados (schema do banco local)  [~] Em andamento (migrations
 Fase 2 — Coleta de Dados (ações BR + cripto)      [~] Em andamento (cotação via brapi, fundamentos LPA/VPA/ROE via bolsai, dividendo médio do Bazin via Yahoo Finance e todas as entradas contábeis do DCF via CVM funcionando ponta a ponta — nenhuma pendência de dado de ações sobrando; TVL Trend (DefiLlama) e Net Issuance (ultrasound.money) automatizados (2 dos 9 indicadores cripto) — ver Log de Sessões; os outros 7 indicadores cripto seguem sem fonte gratuita conhecida)
 Fase 3 — Motor de Cálculo (preço-teto/valuation)  [x] Completa — 7 modelos de ação + score cripto (9 indicadores), todos ponta a ponta
 Fase 4 — Interface Desktop                        [~] Em andamento (shadcn/ui + TanStack Table instalados, tela de valuations salvos completa incl. detalhe fino de premissas, 7 formulários + painel cripto vestidos, identidade visual dark+verde definida)
-Fase 5 — Monitoramento & Alertas                  [ ] Não iniciada
+Fase 5 — Monitoramento & Alertas                  [~] Em andamento (5.1 completa — cadastro de regra de alerta ponta a ponta; falta 5.2 verificação periódica e 5.3 notificação)
 Fase 6 — Publicação (GitHub público)               [ ] Não iniciada
 ```
 
@@ -438,7 +438,7 @@ Diferente de ação (1x/ano), aqui é um **score contínuo**: cada indicador vir
 **Objetivo**: cadastrar premissas de compra por ativo e avisar o usuário quando o indicador entrar na zona configurada.
 
 **Etapas**:
-- [ ] 5.1 — Cadastro de regra de alerta por `tracked_indicator` (ex: preço abaixo do teto, indicador on-chain em faixa X)
+- [x] 5.1 — Cadastro de regra de alerta (tabela `alert_rule` polimórfica: `target_type` "stock_price" reusa o `fair_price` já calculado numa valuation salva, "crypto_indicator" reusa o signal GREEN/RED já calculado via `indicator_thresholds`; sem checagem periódica nem notificação ainda — só o CRUD)
 - [ ] 5.2 — Verificação periódica (rodando localmente — cron, scheduler embutido, ou o próprio app em background)
 - [ ] 5.3 — Notificação (notificação nativa do SO e/ou destaque na UI)
 
@@ -690,11 +690,23 @@ Diferente de ação (1x/ano), aqui é um **score contínuo**: cada indicador vir
 - `cargo check`, `cargo test --lib` (32 testes) e `npx tsc --noEmit` limpos. Coletor rodado de verdade via `docker compose run` **três vezes seguidas** antes de mexer no Rust (confirmando reprodutibilidade, não só uma tentativa) — dividendo médio real gravado pros 4 tickers (PETR4 R$7,88, MGLU3 R$0,29, VALE3 R$8,26, ITUB4 R$1,23). Depois da migration, `main.py` completo rodado de novo confirmando o `INSERT` funcionando. Smoke test real (`dev.sh`) — **usuário confirmou visualmente a tabela "Average dividend" populada** ("deu boa")
 - **Marco**: dividendo médio do Bazin automatizado via Yahoo Finance, resolvendo pra qualquer ticker real (não só demo) — pendência aberta desde a Sessão 5 fechada. De quebra, um bug latente de nomenclatura (coluna/campo/frontend desalinhados) foi descoberto e corrigido só porque essa foi a primeira vez que a tabela recebeu dado de verdade — reforça o hábito de sempre testar contra o fluxo real antes de fechar, mesmo em tabelas "antigas" que nunca tinham sido exercitadas de fato
 
+### 2026-07-11 — Sessão 7
+
+- Usuário decidiu seguir pra **Fase 5 — Monitoramento & Alertas**, começando pela etapa 5.1 (cadastro de regra de alerta). Planejado com `/plan` por atravessar as 3 camadas do projeto pela primeira vez desde a fatia inicial da Fase 2 (migration/entity/comando Rust + painel React), com duas explorações em paralelo (backend SeaORM/Tauri, frontend React) seguidas de um agente de Plan validando o desenho técnico antes de codar
+- **Duas decisões de design consultadas com o usuário antes de codar** (ambas aceitas na opção recomendada): (1) alerta de ação reusa o `fair_price` já calculado numa valuation salva (`valuation_id`), em vez de pedir um preço-alvo novo digitado à mão; (2) alerta de indicador cripto reusa o signal GREEN/NEUTRAL/RED já calculado via `indicator_thresholds`/`domain/crypto_score.rs::classify`, em vez de uma faixa numérica própria por regra. As duas evitam duplicar conceito que já existe no app
+- **Schema**: tabela única polimórfica `alert_rule` (`target_type: "stock_price"|"crypto_indicator"`, `valuation_id` nullable FK→`valuation` com `ON DELETE CASCADE`, `condition`, `coin`/`indicator` nullable, `is_active`, `created_at`) — segue o precedente do discriminador `valuation.model`. Migration `m20260711_093000_create_alert_rule_table` (primeira coluna `boolean` do projeto — `is_active` — confirmada gerando certo via `sea-orm-cli generate entity`, `bool` no Rust)
+- **Achado ao validar o rascunho do agente de Plan contra o código real**: a alegação inicial de que "nenhuma migration usa `.foreign_key(...)` explícito, só a relação SeaORM" estava errada — a migration original (`m20260709_010051_create_valuation_and_bazin_inputs.rs`, `bazin_inputs`) usa sim `.foreign_key(ForeignKey::create()...)`. Conferido lendo o arquivo fonte antes de escrever a migration nova, que replica o mesmo padrão (FK declarado tanto na migration quanto na relação `belongs_to` da entity)
+- **Backend**: `commands/alert_rule.rs` — `create_alert_rule` (valida combinação de campos por `target_type`, confere que a valuation referenciada existe e tem `fair_price`, ou que o `indicator` existe em `indicator_thresholds` reusando `AppError::UnknownIndicator` do mesmo jeito que `record_crypto_indicator` já faz), `list_alert_rules` (DTO `AlertRuleView` com `ticker`/`fair_price` resolvidos via batch-fetch, sem N+1), `set_alert_rule_active` (pausar/retomar sem apagar), `delete_alert_rule`. Nenhuma variante nova de `AppError` — reusa `InvalidGuard`/`UnknownIndicator`/`NotFound`. Editar `target_type`/`condition` de uma regra existente ficou fora de escopo (apagar e recriar)
+- **Frontend**: `src/alerts/AlertsPanel.tsx` (novo) — formulário com toggle de tipo de alerta que troca os campos exibidos (Select de valuation salva pra ação, texto livre de `coin` + Select de indicador pra cripto, igual ao padrão já usado no `CryptoScorePanel`), lista com badge ativo/pausado + botão de toggle, delete com o mesmo "clique de novo pra confirmar" do `SavedValuationsPanel`. Nova aba "Alerts" em `App.tsx`
+- `cargo check`, `cargo test --lib` (32 testes, sem regressão) e `npx tsc --noEmit` limpos. Sem ferramenta de automação de UI disponível pro app desktop (não é possível dirigir o console de devtools do WebView via shell), então a etapa de "testar os comandos antes da UI existir" do plano original foi fundida num único smoke test real — **usuário rodou o app e testou os fluxos de criar/listar/pausar/retomar/apagar pros dois tipos de alerta, confirmou que funcionou** ("deu boa")
+- **Marco**: Fase 5.1 completa — cadastro de regra de alerta funcionando ponta a ponta pros dois tipos (ação e cripto). Falta 5.2 (verificação periódica, provavelmente `tokio::time::interval` + `tauri::async_runtime::spawn`, hoje inexistente no projeto) e 5.3 (notificação, também inexistente — nem `@tauri-apps/plugin-notification` nem toast lib instalados ainda)
+
 **Pendências pra próxima sessão** (em ordem):
-1. Fase 2: nenhuma pendência de dado com caminho conhecido sobrando — `staking_yield` (sem free tier), `active_addresses_trend` (Etherscan Pro-only), `mvrv_z_score`, `puell_multiple` e `exchange_netflow` (sem fonte gratuita conhecida) não valem reabrir sem uma ideia nova. Dividendo médio do Bazin e DCF completos. Próxima frente de dado, se houver, provavelmente vem de uma ideia nova do usuário, não de retomar as pendências antigas
-2. README.md e LICENSE na raiz do repo ainda não existem (Fase 0.5/6.2/6.3) — usuário disse que prefere esperar ter mais "repertório" antes de escrever o README
-3. Quando o usuário voltar a mexer no TruthID mobile, lembrar que o cache Docker foi limpo (Sessão 1 do Practice Valuation) — primeiro `docker compose up` de lá vai ser mais lento
-4. Se algum dia migrar a imagem Docker (Node/Debian), lembrar dos 3 fixes de rede/instalação da Sessão 1 (IPv6, npm audit, node_modules corrompido) — não são óbvios
+1. Fase 5: próxima etapa é 5.2 (verificação periódica dos `alert_rule` ativos) ou 5.3 (notificação) — nenhuma infraestrutura de background/polling ou de notificação existe ainda no projeto, ambas seriam greenfield. Ordem entre elas fica a critério do usuário na próxima sessão
+2. Fase 2: nenhuma pendência de dado com caminho conhecido sobrando — `staking_yield` (sem free tier), `active_addresses_trend` (Etherscan Pro-only), `mvrv_z_score`, `puell_multiple` e `exchange_netflow` (sem fonte gratuita conhecida) não valem reabrir sem uma ideia nova
+3. README.md e LICENSE na raiz do repo ainda não existem (Fase 0.5/6.2/6.3) — usuário disse que prefere esperar ter mais "repertório" antes de escrever o README
+4. Quando o usuário voltar a mexer no TruthID mobile, lembrar que o cache Docker foi limpo (Sessão 1 do Practice Valuation) — primeiro `docker compose up` de lá vai ser mais lento
+5. Se algum dia migrar a imagem Docker (Node/Debian), lembrar dos 3 fixes de rede/instalação da Sessão 1 (IPv6, npm audit, node_modules corrompido) — não são óbvios
 
 ---
 

@@ -23,6 +23,8 @@ pub struct Model {
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
 pub enum Relation {
+    #[sea_orm(has_many = "super::alert_rule::Entity")]
+    AlertRule,
     #[sea_orm(has_many = "super::banks_inputs::Entity")]
     BanksInputs,
     #[sea_orm(has_many = "super::bazin_inputs::Entity")]
@@ -37,6 +39,12 @@ pub enum Relation {
     ProjectedCeilingInputs,
     #[sea_orm(has_many = "super::rnav_inputs::Entity")]
     RnavInputs,
+}
+
+impl Related<super::alert_rule::Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::AlertRule.def()
+    }
 }
 
 impl Related<super::banks_inputs::Entity> for Entity {

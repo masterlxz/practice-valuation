@@ -1,3 +1,4 @@
+pub mod alert_rule;
 pub mod banks;
 pub mod bazin;
 pub mod collector;

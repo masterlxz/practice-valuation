@@ -8,6 +8,7 @@ import RnavForm from "./models/RnavForm";
 import ProjectedCeilingForm from "./models/ProjectedCeilingForm";
 import CryptoScorePanel from "./crypto/CryptoScorePanel";
 import SavedValuationsPanel from "./valuations/SavedValuationsPanel";
+import AlertsPanel from "./alerts/AlertsPanel";
 import StockCollectorPanel from "./collector/StockCollectorPanel";
 import Field from "./components/Field";
 import {
@@ -38,6 +39,7 @@ const SECTIONS = {
   valuation: "Valuation",
   crypto: "Crypto Score",
   saved: "Saved Valuations",
+  alerts: "Alerts",
 } as const;
 
 type SectionKey = keyof typeof SECTIONS;
@@ -91,6 +93,10 @@ function App() {
 
         <TabsContent value="saved">
           <SavedValuationsPanel />
+        </TabsContent>
+
+        <TabsContent value="alerts">
+          <AlertsPanel />
         </TabsContent>
       </Tabs>
     </main>
