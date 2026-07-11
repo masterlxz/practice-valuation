@@ -19,6 +19,8 @@ pub struct Model {
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
 pub enum Relation {
+    #[sea_orm(has_many = "super::alert_event::Entity")]
+    AlertEvent,
     #[sea_orm(
         belongs_to = "super::valuation::Entity",
         from = "Column::ValuationId",
@@ -27,6 +29,12 @@ pub enum Relation {
         on_delete = "Cascade"
     )]
     Valuation,
+}
+
+impl Related<super::alert_event::Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::AlertEvent.def()
+    }
 }
 
 impl Related<super::valuation::Entity> for Entity {

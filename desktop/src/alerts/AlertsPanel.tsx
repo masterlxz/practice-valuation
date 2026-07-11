@@ -62,6 +62,8 @@ type AlertRuleView = {
   fair_price: number | null;
   coin: string | null;
   indicator: string | null;
+  is_triggered: boolean;
+  last_message: string | null;
 };
 
 type CreateAlertRuleRequest = {
@@ -107,6 +109,9 @@ function AlertsPanel() {
   const alertRulesQuery = useQuery<AlertRuleView[], AppError>({
     queryKey: ["alert-rules"],
     queryFn: () => invoke("list_alert_rules"),
+    // Picks up the background checker's (alert_checker.rs, Fase 5.2) state
+    // without a push-event system — good enough for a 5-minute check cycle.
+    refetchInterval: 30_000,
   });
 
   // Reuses the same queryKey as SavedValuationsPanel, so TanStack Query
@@ -322,6 +327,14 @@ function AlertsPanel() {
                       >
                         {rule.is_active ? "Active" : "Paused"}
                       </Badge>
+                      {rule.is_triggered && (
+                        <Badge
+                          className="bg-red-100 text-red-800 dark:bg-red-950 dark:text-red-300"
+                          title={rule.last_message ?? undefined}
+                        >
+                          Triggered
+                        </Badge>
+                      )}
                       <Button
                         variant="outline"
                         size="sm"

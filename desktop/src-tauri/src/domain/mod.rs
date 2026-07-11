@@ -1,3 +1,4 @@
+pub mod alert_check;
 pub mod banks;
 pub mod bazin;
 pub mod crypto_score;

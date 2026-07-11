@@ -14,6 +14,7 @@ mod m20260710_132548_create_stock_dcf_fundamentals;
 mod m20260710_134142_add_tax_rate_to_stock_dcf_fundamentals;
 mod m20260710_220000_rename_avg_dividend5y_column;
 mod m20260711_093000_create_alert_rule_table;
+mod m20260711_171445_create_alert_event_table;
 
 pub struct Migrator;
 
@@ -35,6 +36,7 @@ impl MigratorTrait for Migrator {
             Box::new(m20260710_134142_add_tax_rate_to_stock_dcf_fundamentals::Migration),
             Box::new(m20260710_220000_rename_avg_dividend5y_column::Migration),
             Box::new(m20260711_093000_create_alert_rule_table::Migration),
+            Box::new(m20260711_171445_create_alert_event_table::Migration),
         ]
     }
 }

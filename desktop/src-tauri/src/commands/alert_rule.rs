@@ -6,7 +6,7 @@ use sea_orm::{
 };
 use serde::{Deserialize, Serialize};
 
-use crate::entity::{alert_rule, indicator_thresholds, valuation};
+use crate::entity::{alert_event, alert_rule, indicator_thresholds, valuation};
 use crate::error::AppError;
 
 const STOCK_PRICE: &str = "stock_price";
@@ -128,6 +128,8 @@ pub struct AlertRuleView {
     pub fair_price: Option<f64>,
     pub coin: Option<String>,
     pub indicator: Option<String>,
+    pub is_triggered: bool,
+    pub last_message: Option<String>,
 }
 
 #[tauri::command]
@@ -152,10 +154,26 @@ pub async fn list_alert_rules(
             .collect()
     };
 
+    // Same batch-then-fold pattern as `valuations` above — surfaces the
+    // background checker's (Fase 5.2, alert_checker.rs) latest known state
+    // for each rule without a second round-trip from the frontend.
+    let rule_ids: Vec<i32> = rules.iter().map(|r| r.id).collect();
+    let latest_events: HashMap<i32, alert_event::Model> = alert_event::Entity::find()
+        .filter(alert_event::Column::AlertRuleId.is_in(rule_ids))
+        .order_by_desc(alert_event::Column::CreatedAt)
+        .all(db.inner())
+        .await?
+        .into_iter()
+        .fold(HashMap::new(), |mut acc, event| {
+            acc.entry(event.alert_rule_id).or_insert(event);
+            acc
+        });
+
     let views = rules
         .into_iter()
         .map(|rule| {
             let related = rule.valuation_id.and_then(|id| valuations.get(&id));
+            let last_event = latest_events.get(&rule.id);
             AlertRuleView {
                 id: rule.id,
                 target_type: rule.target_type,
@@ -167,6 +185,8 @@ pub async fn list_alert_rules(
                 fair_price: related.and_then(|v| v.fair_price),
                 coin: rule.coin,
                 indicator: rule.indicator,
+                is_triggered: last_event.map(|e| e.is_triggered).unwrap_or(false),
+                last_message: last_event.map(|e| e.message.clone()),
             }
         })
         .collect();

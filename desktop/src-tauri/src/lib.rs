@@ -1,5 +1,6 @@
 use std::sync::atomic::AtomicBool;
 
+mod alert_checker;
 mod commands;
 mod db;
 mod domain;
@@ -9,6 +10,7 @@ mod error;
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let db = tauri::async_runtime::block_on(db::connect()).expect("failed to connect to database");
+    alert_checker::spawn_periodic_check(db.clone());
 
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())

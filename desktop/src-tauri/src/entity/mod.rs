@@ -2,6 +2,7 @@
 
 pub mod prelude;
 
+pub mod alert_event;
 pub mod alert_rule;
 pub mod banks_inputs;
 pub mod bazin_inputs;
