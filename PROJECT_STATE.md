@@ -479,6 +479,29 @@ Planejado com `/plan` na Sessão 10 (pesquisa real contra a doc do Gemini via `W
 
 ---
 
+### Fase 8 — Sync Multi-Dispositivo via TruthID + IPFS (ideia levantada na Sessão 11, não iniciada)
+
+**Objetivo**: sincronizar valuations/alertas salvos entre dispositivos (celular, outro PC) de forma descentralizada — sem servidor próprio do Practice Valuation — reaproveitando a identidade e a infraestrutura já existentes no TruthID (outro projeto do usuário, `~/Documents/workspace/truthid`).
+
+**Só brainstorm nesta sessão — nada implementado, nenhum `/plan` rodado ainda.** Registrado porque cruza os dois repositórios e envolveria mudanças no TruthID também (ver `PROJECT_STATE.md` do TruthID, seção "Roadmap de Evoluções Planejadas", entrada da Sessão 94).
+
+**Desenho discutido**:
+- **P2P direto entre devices foi descartado** — usuário não gosta da abordagem (conexão ao vivo entre dispositivos, NAT, complexidade). Transporte vira **assíncrono via IPFS**: cada device publica quando muda algo, os outros puxam quando abrem — sem exigir dois devices online ao mesmo tempo.
+- **Achado-chave**: o TruthID já tem o mecanismo que esse sync precisaria — `VaultRegistry.sol` (`identityId → {cid, contentHash, version}`), blob cifrado (AES-256-GCM, chave via HKDF, nunca sai do device) publicado no IPFS com múltiplos provedores de pinning (health-checked), já testado ponta a ponta em hardware real (TruthID, Sessão 90 — celular físico + Ledger + Base Mainnet). **Mas** hoje é 1 vault por identidade, dedicado ao password manager (Fase 13 do TruthID) — reaproveitar pro Practice Valuation exigiria generalizar (`identityId + vaultKind/appId → VaultRef`) ou um contrato irmão no mesmo padrão. Nenhuma das duas escolhida ainda.
+- O modelo de dados do Practice Valuation já ajuda bastante aqui: `valuation` e `alert_event` já são append-only ("nunca sobrescreve", ver Fase 1/5.2) — formato natural pra um log de eventos com merge por replay causal entre dispositivos, sem precisar desenhar CRDT do zero.
+- **Login/pareamento de device**: reaproveitar o fluxo de QR do TruthID em vez de inventar conta própria. Duas opções discutidas — servidor HTTP local na mesma rede (usuário precisaria aceitar exigir mesma Wi-Fi na hora de conectar) vs. polling puro on-chain (não depende de rede local, mas mais lento). Usuário preferiu a primeira, mas com uma ressalva de segurança confirmada no código do TruthID: o callback tem que continuar `https://` quando presente — não dá pra abrir uma exceção pra `http://` na LAN sem reabrir o risco que a checagem atual existe pra evitar (QR malicioso redirecionando a resposta assinada pro servidor de um atacante, ver `approval_screen.dart:88-96` no TruthID).
+- Também discutido: o TruthID poderia oferecer os dois canais de login ao mesmo tempo (POST HTTPS preferencial + fallback on-chain), pra atender integradores sem backend público como o Practice Valuation. Confirmado como viável e barato de fazer — a escrita da sessão on-chain **já acontece hoje incondicionalmente** em todo login do TruthID (via `SessionCreator`/UserOperation, antes até do POST); só falta o TruthID tornar `callbackUrl` opcional no payload do QR.
+
+**Em aberto, sem decisão**:
+- Reaproveitar `VaultRegistry` generalizado vs. contrato irmão dedicado no TruthID
+- Servidor local (mesma rede) vs. reconsiderar chain-only pro pareamento de device
+- Se o TruthID vai mesmo ganhar o modo dual-channel de login, ou isso fica só documentado como possibilidade
+- Criptografia dos dados do Practice Valuation antes de subir pro IPFS — provavelmente reaproveita o mesmo padrão do Vault (chave derivada do device key, nunca sai do device), não aprofundado ainda
+
+**Próximo passo, quando o usuário voltar a este tópico**: nenhum. Fica atrás de Fase 5.3 e Fase 7 na fila — ritmo do projeto é lento/de fundo (ver "Ritmo e Expectativa do Projeto"), e essa feature em particular também depende de decisões do lado do TruthID.
+
+---
+
 ## Decisões de Arquitetura em Aberto
 
 | Decisão | Opções | Status |
@@ -492,7 +515,7 @@ Planejado com `/plan` na Sessão 10 (pesquisa real contra a doc do Gemini via `W
 | Busca de dados no React | TanStack Query vs `useState`/`useEffect` na mão | **TanStack Query** ✓ — decidido na Sessão 1. Mesma família do TanStack Table (Fase 0.4); evita repetir controle de loading/erro/cache em cada tela |
 | Caminho físico do arquivo SQLite (dev) | Dentro de `desktop/` vs `data-collector/` vs pasta `data/` própria | **`data-collector/practice_valuation.db`** ✓ — decidido na Sessão 1. Rust e Python já rodam no mesmo container, então só precisam apontar pro mesmo arquivo — sem API/rede entre eles. Caminho de produção (fora do Docker, pasta de dados do SO) fica pra Fase 6 |
 | Forma de guardar premissas/resultados de valuation | JSON genérico vs 7 tabelas auto-contidas vs `valuation` compartilhada + inputs por modelo | **`valuation` compartilhada + tabela de inputs tipada por modelo** ✓ — decidido na Sessão 1, em duas etapas: primeiro trocou JSON por tabelas tipadas (spec chegou com campos conhecidos/estáveis, valida melhor as guardas `WACC−g`/`Ke vs g`), depois o usuário pediu revisão pra evitar repetir os campos comuns (`ticker`/`ano_ref`/`preco_justo`) em 7 tabelas — extraído pra uma tabela só, o que também simplifica a tela de listagem (Fase 4.1) |
-| Sync entre dispositivos/nuvem | Adiado — ver Roadmap | Não é MVP |
+| Sync entre dispositivos/nuvem | Adiado — ver Fase 8 | Não é MVP — ideia desenhada na Sessão 11 (descentralizado, via TruthID + IPFS), nada implementado |
 | Densidade visual | Denso (planilha) vs meio-termo vs arejado (dashboard) | **Arejado, tipo dashboard** ✓ — decidido na Sessão 1 |
 | Biblioteca de tabela/grid | AG Grid Community vs Glide Data Grid vs TanStack Table + shadcn/ui | **TanStack Table + shadcn/ui** ✓ — decidido na Sessão 1. Motivo: headless, visual 100% customizável e consistente com o resto do app (mesma base do shadcn/ui), em troca de implementar edição/filtro na mão em vez de ganhar pronto |
 | Sistema de componentes | shadcn/ui vs Mantine vs Ant Design | **shadcn/ui** (Radix + Tailwind) ✓ — decidido na Sessão 1. Componentes copiados pro repo, visual moderno/neutro, fácil de customizar |
@@ -505,7 +528,7 @@ Planejado com `/plan` na Sessão 10 (pesquisa real contra a doc do Gemini via `W
 
 ## Roadmap de Evoluções Planejadas
 
-- **Sync entre máquinas/nuvem**: hoje o banco é 100% local; no futuro avaliar sync (self-hosted vs serviço gerenciado)
+- **Sync entre máquinas/nuvem**: hoje o banco é 100% local; desenho descentralizado via TruthID + IPFS discutido na Sessão 11, ver Fase 8 em "Fases Detalhadas"
 - **Mais indicadores de cripto pagos** (Glassnode/CryptoQuant — MVRV, Puell, Netflow) se o usuário decidir assinar
 - **Companion mobile** — só se fizer sentido depois do desktop estar redondo
 - **Mais metodologias de valuation** conforme o usuário for trazendo (Bazin/preço-teto, Graham, DCF, EV/EBITDA setorial, etc.)
@@ -772,6 +795,16 @@ Planejado com `/plan` na Sessão 10 (pesquisa real contra a doc do Gemini via `W
 4. README.md e LICENSE na raiz do repo ainda não existem (Fase 0.5/6.2/6.3) — usuário disse que prefere esperar ter mais "repertório" antes de escrever o README
 5. Quando o usuário voltar a mexer no TruthID mobile, lembrar que o cache Docker foi limpo (Sessão 1 do Practice Valuation) — primeiro `docker compose up` de lá vai ser mais lento
 6. Se algum dia migrar a imagem Docker (Node/Debian), lembrar dos 3 fixes de rede/instalação da Sessão 1 (IPv6, npm audit, node_modules corrompido) — não são óbvios
+
+---
+
+### 2026-07-12 — Sessão 11
+
+- Usuário trouxe outra ideia (só brainstorm, não implementada): sincronizar o Practice Valuation entre dispositivos (celular, outro PC) de forma descentralizada, usando IPFS e reaproveitando a identidade do TruthID em vez de um sistema de conta próprio
+- Descartado logo de cara: P2P direto entre devices (usuário não gosta). Redesenhado como sync assíncrono via IPFS (publish/pull, sem exigir dois devices online juntos)
+- Investigação real no código do TruthID (não só teoria) confirmou duas coisas importantes: (1) `VaultRegistry.sol` já é praticamente o mecanismo necessário (CID versionado por identidade, blob cifrado, múltiplos provedores de pin com health-check, testado em hardware real) — só é 1 vault por identidade hoje, amarrado ao password manager, precisaria generalizar; (2) o login por QR do TruthID exige `callbackUrl` https obrigatório (`approval_screen.dart`), mas a escrita da sessão on-chain já acontece incondicionalmente antes do POST — então um modo de login "sem callback" (fallback on-chain) é barato de expor, só tornando o campo opcional
+- Virou a **Fase 8** (ver "Fases Detalhadas") — ideia registrada, nenhuma etapa concreta ainda, depende de decisões do lado do TruthID também (ver `PROJECT_STATE.md` do TruthID, Sessão 94)
+- Nenhum código tocado nesta sessão — só a atualização deste arquivo
 
 ---
 
