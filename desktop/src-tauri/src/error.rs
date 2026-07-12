@@ -24,6 +24,8 @@ pub enum AppError {
     Keyring(#[from] keyring::Error),
     #[error("no API key configured for provider '{0}'")]
     MissingApiKey(String),
+    #[error("chat provider '{0}' is not implemented yet")]
+    ProviderNotImplemented(String),
     #[error("HTTP request failed: {0}")]
     Http(#[from] reqwest::Error),
     #[error("Gemini API error: {0}")]
@@ -44,6 +46,7 @@ impl AppError {
             AppError::UnknownProvider(_) => "UNKNOWN_PROVIDER",
             AppError::Keyring(_) => "KEYRING_ERROR",
             AppError::MissingApiKey(_) => "MISSING_API_KEY",
+            AppError::ProviderNotImplemented(_) => "PROVIDER_NOT_IMPLEMENTED",
             AppError::Http(_) => "HTTP_ERROR",
             AppError::GeminiApi(_) => "GEMINI_API_ERROR",
         }

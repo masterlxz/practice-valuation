@@ -2,10 +2,10 @@ use sea_orm::{DatabaseConnection, EntityTrait, QueryOrder, QuerySelect};
 use serde::{Deserialize, Serialize};
 
 use crate::commands::api_key::KEYRING_SERVICE;
+use crate::domain::chat_provider::Provider;
 use crate::entity::{alert_event, valuation};
 use crate::error::AppError;
 
-const GEMINI_PROVIDER: &str = "gemini";
 const GEMINI_MODEL: &str = "gemini-3.1-flash-lite";
 
 // Hand-written, not generated from the domain modules — this is a compact
@@ -130,24 +130,25 @@ struct GeminiCandidate {
     content: GeminiContent,
 }
 
-fn read_gemini_api_key() -> Result<String, AppError> {
-    let entry = keyring::Entry::new(KEYRING_SERVICE, GEMINI_PROVIDER)?;
+// Reusable by any provider (Claude/OpenAI in Fase 7.6/7.7 call this the same
+// way) — keyring lookup itself doesn't depend on which provider it's for.
+fn read_api_key(provider: Provider) -> Result<String, AppError> {
+    let entry = keyring::Entry::new(KEYRING_SERVICE, provider.as_str())?;
     match entry.get_password() {
         Ok(key) => Ok(key),
-        Err(keyring::Error::NoEntry) => Err(AppError::MissingApiKey(GEMINI_PROVIDER.to_string())),
+        Err(keyring::Error::NoEntry) => Err(AppError::MissingApiKey(provider.as_str().to_string())),
         Err(err) => Err(err.into()),
     }
 }
 
-#[tauri::command]
-pub async fn ask_gemini(
-    db: tauri::State<'_, DatabaseConnection>,
+async fn ask_gemini_api(
+    api_key: &str,
+    system_instruction_text: String,
     history: Vec<GeminiContent>,
 ) -> Result<String, AppError> {
-    let api_key = read_gemini_api_key()?;
     let system_instruction = GeminiSystemInstruction {
         parts: vec![GeminiPart {
-            text: build_system_instruction(db.inner()).await?,
+            text: system_instruction_text,
         }],
     };
 
@@ -176,6 +177,30 @@ pub async fn ask_gemini(
         .and_then(|candidate| candidate.content.parts.into_iter().next())
         .map(|part| part.text)
         .ok_or_else(|| AppError::GeminiApi("empty response from Gemini".to_string()))
+}
+
+// Provider-generic entry point for the chat panel. Claude/OpenAI are valid
+// `provider` values (see `Provider::parse`) but have no HTTP client wired up
+// yet — they fail fast with a typed error instead of being rejected as an
+// unknown provider, which would be misleading (they ARE known, just not
+// implemented; see Fase 7.5/7.6/7.7 in PROJECT_STATE.md).
+#[tauri::command]
+pub async fn ask_ai(
+    provider: String,
+    db: tauri::State<'_, DatabaseConnection>,
+    history: Vec<GeminiContent>,
+) -> Result<String, AppError> {
+    let provider = Provider::parse(&provider)?;
+    match provider {
+        Provider::Gemini => {
+            let api_key = read_api_key(Provider::Gemini)?;
+            let system_instruction = build_system_instruction(db.inner()).await?;
+            ask_gemini_api(&api_key, system_instruction, history).await
+        }
+        Provider::Claude | Provider::OpenAi => Err(AppError::ProviderNotImplemented(
+            provider.as_str().to_string(),
+        )),
+    }
 }
 
 #[cfg(test)]

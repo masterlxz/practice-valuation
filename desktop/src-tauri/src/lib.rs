@@ -37,7 +37,7 @@ pub fn run() {
             commands::api_key::store_api_key,
             commands::api_key::get_api_key_status,
             commands::api_key::delete_api_key,
-            commands::gemini::ask_gemini,
+            commands::chat::ask_ai,
             commands::collector::run_stock_collector,
             commands::collector::run_crypto_collector,
             commands::collector::list_stock_quotes,

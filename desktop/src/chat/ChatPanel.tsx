@@ -52,7 +52,8 @@ function ChatPanel({
   });
 
   const sendMutation = useMutation<string, AppError, GeminiContent[]>({
-    mutationFn: (nextHistory) => invoke("ask_gemini", { history: nextHistory }),
+    mutationFn: (nextHistory) =>
+      invoke("ask_ai", { provider: "gemini", history: nextHistory }),
   });
 
   useEffect(() => {
