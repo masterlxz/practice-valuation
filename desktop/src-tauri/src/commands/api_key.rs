@@ -1,6 +1,6 @@
 use crate::error::AppError;
 
-const KEYRING_SERVICE: &str = "practice-valuation";
+pub(crate) const KEYRING_SERVICE: &str = "practice-valuation";
 
 // Only Gemini is wired end-to-end in this slice (Fase 7.1/7.2); Claude and
 // OpenAI join this list in Fase 7.6/7.7. Each provider gets its own keyring

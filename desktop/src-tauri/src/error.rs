@@ -22,6 +22,12 @@ pub enum AppError {
     UnknownProvider(String),
     #[error("keyring error: {0}")]
     Keyring(#[from] keyring::Error),
+    #[error("no API key configured for provider '{0}'")]
+    MissingApiKey(String),
+    #[error("HTTP request failed: {0}")]
+    Http(#[from] reqwest::Error),
+    #[error("Gemini API error: {0}")]
+    GeminiApi(String),
 }
 
 impl AppError {
@@ -37,6 +43,9 @@ impl AppError {
             AppError::Database(_) => "DATABASE_ERROR",
             AppError::UnknownProvider(_) => "UNKNOWN_PROVIDER",
             AppError::Keyring(_) => "KEYRING_ERROR",
+            AppError::MissingApiKey(_) => "MISSING_API_KEY",
+            AppError::Http(_) => "HTTP_ERROR",
+            AppError::GeminiApi(_) => "GEMINI_API_ERROR",
         }
     }
 }

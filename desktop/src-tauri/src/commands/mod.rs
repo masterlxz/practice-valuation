@@ -5,6 +5,7 @@ pub mod bazin;
 pub mod collector;
 pub mod crypto_indicator;
 pub mod dcf;
+pub mod gemini;
 pub mod gordon;
 pub mod graham;
 pub mod projected_ceiling;
