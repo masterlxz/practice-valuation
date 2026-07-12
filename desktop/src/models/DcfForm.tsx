@@ -1,7 +1,9 @@
 import { useState, type FormEvent } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { useMutation } from "@tanstack/react-query";
+import { RefreshCw } from "lucide-react";
 import type { AppError, ValuationModel } from "../types";
+import { useTickerCollector } from "../collector/useTickerCollector";
 import ValuationResult from "../components/ValuationResult";
 import Field from "../components/Field";
 import { Input } from "@/components/ui/input";
@@ -81,11 +83,46 @@ function DcfForm() {
   const [kd, setKd] = useState("");
   const [perpetuityGrowth, setPerpetuityGrowth] = useState("");
 
+  const tickerCollector = useTickerCollector();
+  const [tickerError, setTickerError] = useState<string | null>(null);
+
   const mutation = useMutation<DcfValuationResponse, AppError, CalculateDcfRequest>(
     {
       mutationFn: (request) => invoke("calculate_dcf", { request }),
     },
   );
+
+  async function handleFetch() {
+    if (!ticker.trim()) {
+      setTickerError("Ticker is required to fetch data.");
+      return;
+    }
+    setTickerError(null);
+    const data = await tickerCollector.mutateAsync(ticker).catch(() => null);
+    if (!data) return;
+    let filled = 0;
+    if (data.quote) {
+      setCurrentPrice(String(data.quote.price));
+      filled++;
+    }
+    if (data.dcfFundamentals) {
+      const dcf = data.dcfFundamentals;
+      setEbit(String(dcf.ebit));
+      if (dcf.tax_rate !== null) setTaxRate(String(dcf.tax_rate));
+      if (dcf.depreciation_amortization !== null) {
+        setDepreciationAmortization(String(dcf.depreciation_amortization));
+      }
+      if (dcf.capex !== null) setCapex(String(dcf.capex));
+      setNwcChange(String(dcf.nwc_change));
+      setTotalDebt(String(dcf.total_debt));
+      setCash(String(dcf.cash));
+      setSharesOutstanding(String(dcf.shares_outstanding));
+      filled++;
+    }
+    if (filled === 0) {
+      setTickerError(`No data found for ${ticker.toUpperCase()}.`);
+    }
+  }
 
   function handleSubmit(event: FormEvent) {
     event.preventDefault();
@@ -120,12 +157,32 @@ function DcfForm() {
           className="grid grid-cols-1 gap-4 sm:grid-cols-2"
         >
           <Field label="Ticker">
-            <Input
-              required
-              value={ticker}
-              onChange={(e) => setTicker(e.currentTarget.value)}
-              placeholder="ITSA4"
-            />
+            <div className="flex gap-2">
+              <Input
+                required
+                value={ticker}
+                onChange={(e) => setTicker(e.currentTarget.value)}
+                placeholder="ITSA4"
+                className="flex-1"
+              />
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                onClick={handleFetch}
+                disabled={tickerCollector.isPending}
+                aria-label="Fetch data for this ticker"
+                title="Fetch data for this ticker"
+              >
+                <RefreshCw
+                  className={tickerCollector.isPending ? "animate-spin" : ""}
+                />
+              </Button>
+            </div>
+            {tickerError && <p className="text-red-600">{tickerError}</p>}
+            {tickerCollector.isError && (
+              <p className="text-red-600">{tickerCollector.error.message}</p>
+            )}
           </Field>
 
           <Field label="Reference year">

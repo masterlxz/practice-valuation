@@ -55,8 +55,9 @@ async fn run_collector(
 #[tauri::command]
 pub async fn run_stock_collector(
     lock: tauri::State<'_, AtomicBool>,
+    ticker: String,
 ) -> Result<CollectorSummary, AppError> {
-    run_collector(&lock, &[]).await
+    run_collector(&lock, &["--ticker", &ticker]).await
 }
 
 #[tauri::command]

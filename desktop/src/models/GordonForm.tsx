@@ -1,7 +1,9 @@
 import { useState, type FormEvent } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { useMutation } from "@tanstack/react-query";
+import { RefreshCw } from "lucide-react";
 import type { AppError, ValuationModel } from "../types";
+import { useTickerCollector } from "../collector/useTickerCollector";
 import ValuationResult from "../components/ValuationResult";
 import Field from "../components/Field";
 import { Input } from "@/components/ui/input";
@@ -40,6 +42,9 @@ function GordonForm() {
   const [expectedGrowth, setExpectedGrowth] = useState("");
   const [ke, setKe] = useState("");
 
+  const tickerCollector = useTickerCollector();
+  const [tickerError, setTickerError] = useState<string | null>(null);
+
   const mutation = useMutation<
     GordonValuationResponse,
     AppError,
@@ -47,6 +52,28 @@ function GordonForm() {
   >({
     mutationFn: (request) => invoke("calculate_gordon", { request }),
   });
+
+  async function handleFetch() {
+    if (!ticker.trim()) {
+      setTickerError("Ticker is required to fetch data.");
+      return;
+    }
+    setTickerError(null);
+    const data = await tickerCollector.mutateAsync(ticker).catch(() => null);
+    if (!data) return;
+    let filled = 0;
+    if (data.quote) {
+      setCurrentPrice(String(data.quote.price));
+      filled++;
+    }
+    if (data.dividendsAvg) {
+      setCurrentDividend(String(data.dividendsAvg.avg_dividend_5y));
+      filled++;
+    }
+    if (filled === 0) {
+      setTickerError(`No data found for ${ticker.toUpperCase()}.`);
+    }
+  }
 
   function handleSubmit(event: FormEvent) {
     event.preventDefault();
@@ -71,12 +98,32 @@ function GordonForm() {
           className="grid grid-cols-1 gap-4 sm:grid-cols-2"
         >
           <Field label="Ticker">
-            <Input
-              required
-              value={ticker}
-              onChange={(e) => setTicker(e.currentTarget.value)}
-              placeholder="ITSA4"
-            />
+            <div className="flex gap-2">
+              <Input
+                required
+                value={ticker}
+                onChange={(e) => setTicker(e.currentTarget.value)}
+                placeholder="ITSA4"
+                className="flex-1"
+              />
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                onClick={handleFetch}
+                disabled={tickerCollector.isPending}
+                aria-label="Fetch data for this ticker"
+                title="Fetch data for this ticker"
+              >
+                <RefreshCw
+                  className={tickerCollector.isPending ? "animate-spin" : ""}
+                />
+              </Button>
+            </div>
+            {tickerError && <p className="text-red-600">{tickerError}</p>}
+            {tickerCollector.isError && (
+              <p className="text-red-600">{tickerCollector.error.message}</p>
+            )}
           </Field>
 
           <Field label="Reference year">
@@ -106,6 +153,10 @@ function GordonForm() {
               value={currentDividend}
               onChange={(e) => setCurrentDividend(e.currentTarget.value)}
             />
+            <p className="text-xs text-muted-foreground">
+              Pré-preenchido com a média de dividendos dos últimos 5 anos —
+              ajuste se tiver o valor exato do último dividendo pago.
+            </p>
           </Field>
 
           <Field label="Expected dividend growth — g (%)">

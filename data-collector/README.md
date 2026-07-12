@@ -9,7 +9,7 @@ compartilhado com o app (`../desktop`). Ver `PROJECT_STATE.md` na raiz do repo �
 ```
 python3 -m venv .venv
 .venv/bin/pip install -r requirements.txt
-cp .env.example .env  # preencher BRAPI_TOKEN se for usar tickers além dos 4 de teste
+cp .env.example .env  # preencher BOLSAI_API_KEY
 ```
 
 ## Rodar manualmente (sem passar pelo app)
@@ -24,9 +24,6 @@ Disparado pelo app via o comando Tauri `run_stock_collector`
 
 ## Implementado
 
-- `sources/acoes_brapi.py` — cotação atual de ações BR (Fase 2.2, parcial)
-
-## Ainda não implementado
-
-- `acoes_bolsai.py`, `cvm_dfp.py` (fundamentos de ações — Fase 2.2)
-- Fontes de cripto (Fase 2.3), extração de PDF (Fase 2.4)
+Ver `PROJECT_STATE.md` na raiz do repo (seção "Fase 2 — Coleta de Dados")
+para o estado atual e o log de sessões — este arquivo não é atualizado a
+cada mudança de fonte de dado.

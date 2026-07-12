@@ -1,22 +1,26 @@
-"""Cliente da API não-oficial do Yahoo Finance (histórico de dividendos).
+"""Cliente da API não-oficial do Yahoo Finance (cotação atual + histórico de
+dividendos).
 
-Endpoint confirmado direto contra a API real (2026-07-10) — público, sem
-chave, sem cadastro, funciona pra qualquer ticker da B3 (não só os 4
-tickers de teste da brapi): GET /v8/finance/chart/{ticker}.SA com
-range=10y&events=div devolve, além da série de preço (ignorada aqui), um
-bloco `chart.result[0].events.dividends` — um dict de
-{epoch_do_anuncio: {"amount": <R$/ação>, "date": <epoch_do_pagamento>}}.
+Endpoint confirmado direto contra a API real (2026-07-10, recheckado
+2026-07-12 pra cotação) — público, sem chave, sem cadastro, funciona pra
+qualquer ticker da B3 (diferente da brapi, cuja cotação de graça só cobre 4
+tickers de teste sem token — ver histórico em `PROJECT_STATE.md`, Sessão 4/6):
+GET /v8/finance/chart/{ticker}.SA devolve um bloco `chart.result[0].meta`
+com `regularMarketPrice` (usado por `fetch_quotes`) e, quando
+`events=div` é passado, também `chart.result[0].events.dividends` — um
+dict de {epoch_do_anuncio: {"amount": <R$/ação>, "date":
+<epoch_do_pagamento>}} (usado por `fetch_dividends_avg`).
 
 **Achado**: essa rota não é documentada oficialmente pelo Yahoo (é a mesma
 usada por baixo dos panos pela lib `yfinance`) — sem contrato formal de
-estabilidade, mas amplamente usada e sem exigir cadastro nenhum, diferente
-da bolsai (que bloqueia esse mesmo dado — `GET /dividends` — no plano
-Free) e da brapi (que só libera dividendos de graça pros 4 tickers de
-teste; qualquer outro ticker real exige plano pago, R$99,99+/mês).
+estabilidade, mas amplamente usada e sem exigir cadastro nenhum.
 
-Usado aqui só pro "dividendo médio por ação, últimos 5 anos completos" que
-o Bazin pede — mesmo cálculo já usado com a bolsai (soma por ano, descarta
-o ano corrente parcial, média dos últimos 5 anos completos).
+`fetch_dividends_avg` calcula o "dividendo médio por ação, últimos 5 anos
+completos" que o Bazin pede (soma por ano, descarta o ano corrente parcial,
+média dos últimos 5 anos completos). `fetch_quotes` substituiu totalmente
+`acoes_brapi.py` (removido) — a brapi exigia token pago pra qualquer ticker
+fora da demo, o que quebrava a busca ad hoc por ticker (Fase "fetch por
+ticker" nos formulários de valuation).
 """
 
 from collections import defaultdict
@@ -30,6 +34,33 @@ YAHOO_CHART_URL = "https://query1.finance.yahoo.com/v8/finance/chart"
 # o ano corrente (parcial).
 HISTORY_RANGE = "10y"
 DIVIDENDS_YEARS_AVERAGED = 5
+
+
+def fetch_quotes(tickers: list[str]) -> list[dict]:
+    """Busca a cotação atual de uma lista de tickers.
+
+    Retorna uma lista de {"ticker": str, "price": float}. Tickers que
+    falharem na API são ignorados — não derrubam o resto, mesmo padrão de
+    `fetch_dividends_avg`.
+    """
+    results = []
+
+    for ticker in tickers:
+        try:
+            response = requests.get(
+                f"{YAHOO_CHART_URL}/{ticker}.SA",
+                params={"range": "5d", "interval": "1d"},
+                headers={"User-Agent": "Mozilla/5.0"},
+                timeout=15,
+            )
+            response.raise_for_status()
+            price = response.json()["chart"]["result"][0]["meta"]["regularMarketPrice"]
+        except (requests.RequestException, KeyError, TypeError, IndexError):
+            continue
+
+        results.append({"ticker": ticker, "price": price})
+
+    return results
 
 
 def fetch_dividends_avg(tickers: list[str]) -> list[dict]:

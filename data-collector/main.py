@@ -16,7 +16,6 @@ from dotenv import load_dotenv
 
 from sources import (
     acoes_bolsai,
-    acoes_brapi,
     acoes_yahoo,
     cripto_defillama,
     cripto_ultrasound,
@@ -37,14 +36,14 @@ def collect_stock_quotes(tickers: list[str]) -> list[dict]:
     if not tickers:
         return []
 
-    quotes = acoes_brapi.fetch_quotes(tickers)
+    quotes = acoes_yahoo.fetch_quotes(tickers)
 
     conn = sqlite3.connect(DB_PATH)
     conn.execute("PRAGMA journal_mode=WAL")
     now = datetime.now(timezone.utc).isoformat()
     conn.executemany(
         "INSERT INTO stock_quotes (ticker, price, source, fetched_at) VALUES (?, ?, ?, ?)",
-        [(quote["ticker"], quote["price"], "brapi", now) for quote in quotes],
+        [(quote["ticker"], quote["price"], "yahoo_finance", now) for quote in quotes],
     )
     conn.commit()
     conn.close()
@@ -221,24 +220,26 @@ def main_crypto() -> int:
     return 0
 
 
-def main() -> int:
+def main(ticker: str | None = None) -> int:
     load_dotenv(BASE_DIR / ".env")
-    config = load_config()
 
-    tickers = config.get("stocks", [])
-    if not tickers:
-        print("No stocks configured in config.yaml")
-        return 0
+    if ticker:
+        tickers = [ticker]
+    else:
+        config = load_config()
+        tickers = config.get("stocks", [])
+        if not tickers:
+            print("No stocks configured in config.yaml")
+            return 0
 
     quotes = collect_stock_quotes(tickers)
     for quote in quotes:
         print(f"{quote['ticker']}: R$ {quote['price']}")
     print(f"Updated {len(quotes)} quote(s)")
 
-    # bolsai requires a signed-up API key (unlike brapi's test tickers) — if
-    # it's missing, skip everything that depends on it (dividends, DCF via
-    # cvm_code) instead of failing the whole run and losing the quotes
-    # collected above.
+    # bolsai requires a signed-up API key — if it's missing, skip everything
+    # that depends on it (dividends, DCF via cvm_code) instead of failing the
+    # whole run and losing the quotes collected above.
     try:
         fundamentals = collect_stock_fundamentals(tickers)
         for item in fundamentals:
@@ -282,4 +283,9 @@ def main() -> int:
 if __name__ == "__main__":
     if len(sys.argv) > 1 and sys.argv[1] == "crypto":
         sys.exit(main_crypto())
+    if len(sys.argv) > 1 and sys.argv[1] == "--ticker":
+        if len(sys.argv) < 3 or not sys.argv[2].strip():
+            print("Usage: python main.py --ticker <TICKER>")
+            sys.exit(1)
+        sys.exit(main(sys.argv[2].strip().upper()))
     sys.exit(main())

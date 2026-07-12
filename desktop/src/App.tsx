@@ -9,7 +9,6 @@ import ProjectedCeilingForm from "./models/ProjectedCeilingForm";
 import CryptoScorePanel from "./crypto/CryptoScorePanel";
 import SavedValuationsPanel from "./valuations/SavedValuationsPanel";
 import AlertsPanel from "./alerts/AlertsPanel";
-import StockCollectorPanel from "./collector/StockCollectorPanel";
 import Field from "./components/Field";
 import {
   Select,
@@ -64,8 +63,6 @@ function App() {
         </TabsList>
 
         <TabsContent value="valuation" className="flex flex-col gap-6">
-          <StockCollectorPanel />
-
           <Field label="Valuation model">
             <Select
               value={selectedModel}
