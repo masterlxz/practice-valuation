@@ -452,6 +452,7 @@ Diferente de ação (1x/ano), aqui é um **score contínuo**: cada indicador vir
 - [ ] 6.2 — README explicando o projeto (em inglês, já que o repo é público)
 - [ ] 6.3 — LICENSE
 - [ ] 6.4 — `git init` + primeiro commit
+- [ ] 6.5 — **Ideia registrada na Sessão 10** (não planejada em detalhe ainda, só anotada): aviso de atualização disponível — um indicador discreto num cantinho da tela quando existir uma versão nova do app. Candidato natural: `tauri-plugin-updater` (checa contra um manifesto de release, ex. GitHub Releases) — só faz sentido depois que 6.1–6.4 existirem (precisa ter release/versionamento publicado pra ter contra o que comparar)
 
 ---
 
