@@ -9,6 +9,9 @@ import ProjectedCeilingForm from "./models/ProjectedCeilingForm";
 import CryptoScorePanel from "./crypto/CryptoScorePanel";
 import SavedValuationsPanel from "./valuations/SavedValuationsPanel";
 import AlertsPanel from "./alerts/AlertsPanel";
+import ChatPanel from "./chat/ChatPanel";
+import ChatToggleButton from "./chat/ChatToggleButton";
+import type { GeminiContent } from "./chat/types";
 import Field from "./components/Field";
 import {
   Select,
@@ -47,56 +50,67 @@ function App() {
   const [section, setSection] = useState<SectionKey>("valuation");
   const [selectedModel, setSelectedModel] = useState<ModelKey>("bazin");
   const SelectedForm = MODELS[selectedModel].component;
+  const [chatOpen, setChatOpen] = useState(false);
+  const [chatHistory, setChatHistory] = useState<GeminiContent[]>([]);
 
   return (
-    <main className="mx-auto max-w-6xl p-8">
-      <Tabs
-        value={section}
-        onValueChange={(value) => setSection(value as SectionKey)}
-      >
-        <TabsList className="mb-6">
-          {Object.entries(SECTIONS).map(([key, label]) => (
-            <TabsTrigger key={key} value={key}>
-              {label}
-            </TabsTrigger>
-          ))}
-        </TabsList>
+    <>
+      <main className="mx-auto max-w-6xl p-8">
+        <Tabs
+          value={section}
+          onValueChange={(value) => setSection(value as SectionKey)}
+        >
+          <TabsList className="mb-6">
+            {Object.entries(SECTIONS).map(([key, label]) => (
+              <TabsTrigger key={key} value={key}>
+                {label}
+              </TabsTrigger>
+            ))}
+          </TabsList>
 
-        <TabsContent value="valuation" className="flex flex-col gap-6">
-          <Field label="Valuation model">
-            <Select
-              value={selectedModel}
-              onValueChange={(value) => setSelectedModel(value as ModelKey)}
-            >
-              <SelectTrigger className="w-full">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {Object.entries(MODELS).map(([key, { label }]) => (
-                  <SelectItem key={key} value={key}>
-                    {label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </Field>
+          <TabsContent value="valuation" className="flex flex-col gap-6">
+            <Field label="Valuation model">
+              <Select
+                value={selectedModel}
+                onValueChange={(value) => setSelectedModel(value as ModelKey)}
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {Object.entries(MODELS).map(([key, { label }]) => (
+                    <SelectItem key={key} value={key}>
+                      {label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </Field>
 
-          <SelectedForm />
-        </TabsContent>
+            <SelectedForm />
+          </TabsContent>
 
-        <TabsContent value="crypto">
-          <CryptoScorePanel />
-        </TabsContent>
+          <TabsContent value="crypto">
+            <CryptoScorePanel />
+          </TabsContent>
 
-        <TabsContent value="saved">
-          <SavedValuationsPanel />
-        </TabsContent>
+          <TabsContent value="saved">
+            <SavedValuationsPanel />
+          </TabsContent>
 
-        <TabsContent value="alerts">
-          <AlertsPanel />
-        </TabsContent>
-      </Tabs>
-    </main>
+          <TabsContent value="alerts">
+            <AlertsPanel />
+          </TabsContent>
+        </Tabs>
+      </main>
+      <ChatToggleButton open={chatOpen} onToggle={() => setChatOpen((o) => !o)} />
+      <ChatPanel
+        open={chatOpen}
+        onOpenChange={setChatOpen}
+        history={chatHistory}
+        onHistoryChange={setChatHistory}
+      />
+    </>
   );
 }
 
