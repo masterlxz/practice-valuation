@@ -1,4 +1,5 @@
 pub mod alert_rule;
+pub mod api_key;
 pub mod banks;
 pub mod bazin;
 pub mod collector;

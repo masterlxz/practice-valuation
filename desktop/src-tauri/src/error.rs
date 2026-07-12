@@ -18,6 +18,10 @@ pub enum AppError {
     InvalidInput(String),
     #[error("database error: {0}")]
     Database(#[from] sea_orm::DbErr),
+    #[error("unsupported AI chat provider '{0}'")]
+    UnknownProvider(String),
+    #[error("keyring error: {0}")]
+    Keyring(#[from] keyring::Error),
 }
 
 impl AppError {
@@ -31,6 +35,8 @@ impl AppError {
             AppError::CollectorFailed(_) => "COLLECTOR_FAILED",
             AppError::InvalidInput(_) => "INVALID_INPUT",
             AppError::Database(_) => "DATABASE_ERROR",
+            AppError::UnknownProvider(_) => "UNKNOWN_PROVIDER",
+            AppError::Keyring(_) => "KEYRING_ERROR",
         }
     }
 }
