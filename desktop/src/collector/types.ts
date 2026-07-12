@@ -14,6 +14,7 @@ export type StockFundamentals = {
   roe: number;
   source: string;
   fetched_at: string;
+  payout: number | null;
 };
 
 export type StockDividendsAvg = {

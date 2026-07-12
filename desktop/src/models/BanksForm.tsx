@@ -72,6 +72,9 @@ function BanksForm() {
     if (data.fundamentals) {
       setBookValuePerShare(String(data.fundamentals.vpa));
       setRoe(String(data.fundamentals.roe));
+      if (data.fundamentals.payout !== null) {
+        setPayout(String(data.fundamentals.payout));
+      }
       filled++;
     }
     if (filled === 0) {

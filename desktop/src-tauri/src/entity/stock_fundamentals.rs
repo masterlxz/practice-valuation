@@ -17,6 +17,8 @@ pub struct Model {
     pub roe: f64,
     pub source: String,
     pub fetched_at: String,
+    #[sea_orm(column_type = "Double", nullable)]
+    pub payout: Option<f64>,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

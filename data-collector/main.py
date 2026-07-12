@@ -52,19 +52,57 @@ def collect_stock_quotes(tickers: list[str]) -> list[dict]:
 
 
 def collect_stock_fundamentals(tickers: list[str]) -> list[dict]:
+    """lpa/vpa/shares_outstanding/cvm_code vêm da bolsai (conferidos OK), mas
+    o `roe` dela mistura lucro trimestral com TTM dependendo da empresa sem
+    avisar qual é qual (achado real testando o BPAC11, Sessão 16: bolsai
+    devolveu 3,54% quando o real reportado é 26,6%) — por isso `roe` é
+    sobrescrito pelo cálculo direto na CVM (`cvm_dfp.fetch_roe`, mesma
+    fonte/zip que `collect_stock_dcf_fundamentals` já usa pro DCF).
+    Ticker sem ROE extraível na CVM é descartado inteiro, não só o roe —
+    evita reintroduzir silenciosamente o valor da bolsai que está sendo
+    corrigido aqui.
+
+    `payout` (Sessão 16) é diferente: nunca teve fonte automática nenhuma
+    (campo 100% manual no formulário Banks), então é só um acréscimo — um
+    ticker sem payout extraível na CVM (`cvm_dfp.fetch_payout`) continua
+    sendo gravado normalmente, só com `payout=None` (vira NULL), pra não
+    perder lpa/vpa/roe por causa de um caso de borda no payout.
+    """
     if not tickers:
         return []
 
     fundamentals = acoes_bolsai.fetch_fundamentals(tickers)
 
+    ticker_cvm_codes = {f["ticker"]: f["cvm_code"] for f in fundamentals}
+    roe_by_ticker = {
+        item["ticker"]: item["roe"] for item in cvm_dfp.fetch_roe(ticker_cvm_codes)
+    }
+    payout_by_ticker = {
+        item["ticker"]: item["payout"]
+        for item in cvm_dfp.fetch_payout(ticker_cvm_codes)
+    }
+
+    fundamentals = [f for f in fundamentals if f["ticker"] in roe_by_ticker]
+    for item in fundamentals:
+        item["roe"] = roe_by_ticker[item["ticker"]]
+        item["payout"] = payout_by_ticker.get(item["ticker"])
+
     conn = sqlite3.connect(DB_PATH)
     conn.execute("PRAGMA journal_mode=WAL")
     now = datetime.now(timezone.utc).isoformat()
     conn.executemany(
-        "INSERT INTO stock_fundamentals (ticker, lpa, vpa, roe, source, fetched_at) "
-        "VALUES (?, ?, ?, ?, ?, ?)",
+        "INSERT INTO stock_fundamentals (ticker, lpa, vpa, roe, payout, source, fetched_at) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?)",
         [
-            (item["ticker"], item["lpa"], item["vpa"], item["roe"], "bolsai", now)
+            (
+                item["ticker"],
+                item["lpa"],
+                item["vpa"],
+                item["roe"],
+                item["payout"],
+                "bolsai+cvm_dfp",
+                now,
+            )
             for item in fundamentals
         ],
     )
@@ -243,8 +281,10 @@ def main(ticker: str | None = None) -> int:
     try:
         fundamentals = collect_stock_fundamentals(tickers)
         for item in fundamentals:
+            payout = item["payout"]
             print(
-                f"{item['ticker']}: LPA {item['lpa']} / VPA {item['vpa']} / ROE {item['roe']}%"
+                f"{item['ticker']}: LPA {item['lpa']} / VPA {item['vpa']} / "
+                f"ROE {item['roe']}% / Payout {'n/a' if payout is None else f'{payout}%'}"
             )
         print(f"Updated {len(fundamentals)} fundamentals record(s)")
     except RuntimeError as err:

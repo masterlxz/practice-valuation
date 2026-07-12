@@ -219,6 +219,165 @@ def _nwc_change(bpa_rows: list[dict], bpp_rows: list[dict]) -> float:
     return nwc_at(LATEST) - nwc_at(PRIOR)
 
 
+def fetch_roe(ticker_cvm_codes: dict[str, str]) -> list[dict]:
+    """Calcula o ROE (Lucro Líquido Consolidado do Período ÷ Patrimônio
+    Líquido Consolidado, ambos do exercício fiscal mais recente) direto da
+    CVM, em vez de confiar no campo `roe` da bolsai.
+
+    **Achado (Sessão 16)**: o `roe` da bolsai mistura lucro trimestral não
+    anualizado com lucro TTM dependendo da empresa, sem indicar qual é qual
+    — testando contra o BPAC11 real, ela devolveu ROE de 3,54% (só o
+    trimestre mais recente ÷ patrimônio) quando o real reportado é 26,6%.
+
+    O código da conta pra essas duas linhas **não é padronizado entre banco
+    e empresa normal** (ex.: patrimônio líquido é a conta "2.03" pra VALE3
+    mas "2.08" pra bancos, que usam uma taxonomia contábil diferente,
+    COSIF) — por isso usa `_find_by_keyword` (busca por texto), não
+    `_find_exact`. O texto em si já é estável nos dois casos: confirmado
+    contra VALE3/ITUB4/BBAS3/BPAC11 reais que tanto "Lucro/Prejuízo
+    Consolidado do Período" quanto a variante "Lucro ou Prejuízo Líquido
+    Consolidado do Período" (BBAS3) contêm a frase "consolidado do
+    período", e que "Patrimônio Líquido Consolidado" é idêntico nos 4.
+
+    Retorna uma lista de {"ticker": str, "roe": float} — em **percentual**
+    (23.0, não 0.23), mesma convenção já usada em `stock_fundamentals.roe`
+    (ver nota em `_effective_tax_rate`). Ticker sem as duas contas
+    encontráveis é ignorado — pula em vez de arriscar um número errado.
+    """
+    zip_path = _resolve_zip_path()
+
+    with zipfile.ZipFile(zip_path) as zf:
+        year = int(zip_path.stem.rsplit("_", 1)[-1])
+        dre_rows = _read_csv_from_zip(zf, f"dfp_cia_aberta_DRE_con_{year}.csv")
+        bpp_rows = _read_csv_from_zip(zf, f"dfp_cia_aberta_BPP_con_{year}.csv")
+
+    dre_by_cvm_code = _index_by_cvm_code(dre_rows)
+    bpp_by_cvm_code = _index_by_cvm_code(bpp_rows)
+    results = []
+
+    for ticker, cvm_code in ticker_cvm_codes.items():
+        try:
+            net_income = _find_by_keyword(
+                dre_by_cvm_code[int(cvm_code)], "3.", ["consolidado do período"]
+            )
+            equity = _find_by_keyword(
+                bpp_by_cvm_code[int(cvm_code)], "2.", ["patrimônio líquido consolidado"]
+            )
+        except KeyError:
+            continue
+
+        if net_income is None or equity is None or equity <= 0:
+            continue
+
+        results.append({"ticker": ticker, "roe": net_income / equity * 100})
+
+    return results
+
+
+_PATRIMONIO_LIQUIDO_CONSOLIDADO_COLUMN = "Patrimônio Líquido Consolidado"
+_EMPTY_COLUMN = ""
+PAYOUT_YEARS_AVERAGED = 5
+
+
+def _resolve_recent_years(count: int) -> list[int]:
+    """Últimos `count` anos fiscais com zip publicado na CVM, mais recente
+    primeiro. Reaproveita `_resolve_zip_path` só pra descobrir o ano mais
+    recente (já resolve o caso "zip nomeado pelo ano do exercício, não o de
+    publicação") — daqui pra trás não precisa checar 404, a CVM tem zip
+    anual desde que existe."""
+    zip_path = _resolve_zip_path()
+    latest_year = int(zip_path.stem.rsplit("_", 1)[-1])
+    return list(range(latest_year, latest_year - count, -1))
+
+
+def _extract_distributions(dmpl_rows: list[dict]) -> float | None:
+    """Dividendos + Juros sobre Capital Próprio (JCP — vantagem tributária,
+    mais comum em bancos), buscados por palavra-chave (mesmo padrão do
+    lucro em `fetch_roe`) na coluna "Patrimônio Líquido Consolidado" do
+    DMPL (o total — o arquivo repete cada linha uma vez por componente do
+    patrimônio, sem esse filtro a soma ficaria multiplicada).
+
+    **Achado (Sessão 16, teste real do BBDC4)**: pra algumas empresas essa
+    coluna vem zerada por inconsistência da própria CVM, mesmo com a
+    distribuição real presente nos dados — nesse caso o valor verdadeiro
+    aparece na coluna sem rótulo (`COLUNA_DF == ""`). Só cai nesse fallback
+    quando a coluna principal soma exatamente `0.0` (não `None` — `None` é
+    "nenhuma linha bateu", `0.0` é "bateu mas somou zero", só o segundo é
+    suspeito); não troca a coluna padrão porque pelo menos uma empresa
+    testada (BBAS3) tem as duas preenchidas com valores diferentes
+    (provavelmente bruto vs líquido do efeito fiscal do JCP), e a coluna
+    "Patrimônio Líquido Consolidado" está correta pra ela.
+    """
+    consolidado_rows = [
+        r for r in dmpl_rows if r.get("COLUNA_DF") == _PATRIMONIO_LIQUIDO_CONSOLIDADO_COLUMN
+    ]
+    distributions = _find_by_keyword(
+        consolidado_rows, "5.", ["dividendo", "juros sobre capital"]
+    )
+    if distributions != 0.0:
+        return distributions
+
+    empty_rows = [r for r in dmpl_rows if r.get("COLUNA_DF") == _EMPTY_COLUMN]
+    return _find_by_keyword(empty_rows, "5.", ["dividendo", "juros sobre capital"])
+
+
+def fetch_payout(ticker_cvm_codes: dict[str, str]) -> list[dict]:
+    """Calcula o payout médio dos últimos `PAYOUT_YEARS_AVERAGED` anos
+    fiscais (soma de Dividendos+JCP ÷ soma de Lucro Líquido Consolidado,
+    ambos somados ano a ano antes de dividir uma vez só no final — não
+    média simples dos payouts anuais) direto da CVM.
+
+    **Por que média em vez de um ano só (achado do usuário, Sessão 16)**:
+    um ano isolado pode distorcer a realidade — testando a VALE3 real, um
+    ano de lucro baixo com uma distribuição grande vinda de reservas
+    acumuladas deu payout de 275%. Somar 5 anos antes de dividir (em vez de
+    tirar a média de 5 percentuais) evita que um ano de lucro anormalmente
+    baixo puxe o resultado com o mesmo peso dos outros anos.
+
+    Ticker sem dado num ano específico (ex.: IPO recente) só perde aquele
+    ano — os outros anos já acumulados continuam valendo, mesmo espírito
+    de `acoes_yahoo.fetch_dividends_avg`. Ticker sem nenhum ano com dado é
+    descartado inteiro. Retorna uma lista de {"ticker": str, "payout":
+    float} em percentual (28.5, não 0.285), mesma convenção de `fetch_roe`.
+    """
+    totals = {
+        ticker: {"net_income": 0.0, "distributions": 0.0, "years_found": 0}
+        for ticker in ticker_cvm_codes
+    }
+
+    for year in _resolve_recent_years(PAYOUT_YEARS_AVERAGED):
+        zip_path = _download_zip(year)
+        with zipfile.ZipFile(zip_path) as zf:
+            dre_rows = _read_csv_from_zip(zf, f"dfp_cia_aberta_DRE_con_{year}.csv")
+            dmpl_rows = _read_csv_from_zip(zf, f"dfp_cia_aberta_DMPL_con_{year}.csv")
+
+        dre_by_cvm_code = _index_by_cvm_code(dre_rows)
+        dmpl_by_cvm_code = _index_by_cvm_code(dmpl_rows)
+
+        for ticker, cvm_code in ticker_cvm_codes.items():
+            try:
+                net_income = _find_by_keyword(
+                    dre_by_cvm_code[int(cvm_code)], "3.", ["consolidado do período"]
+                )
+                distributions = _extract_distributions(dmpl_by_cvm_code[int(cvm_code)])
+            except KeyError:
+                continue
+
+            if net_income is None or net_income <= 0 or distributions is None:
+                continue
+
+            entry = totals[ticker]
+            entry["net_income"] += net_income
+            entry["distributions"] += distributions
+            entry["years_found"] += 1
+
+    return [
+        {"ticker": ticker, "payout": entry["distributions"] / entry["net_income"] * 100}
+        for ticker, entry in totals.items()
+        if entry["years_found"] > 0
+    ]
+
+
 def fetch_dcf_fundamentals(ticker_cvm_codes: dict[str, str]) -> list[dict]:
     """Busca os 7 campos do DCF derivados de dados contábeis da CVM (EBIT,
     alíquota efetiva, D&A, Capex, ΔNWC, dívida total, caixa) pra cada
