@@ -10,17 +10,12 @@ mod error;
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let db = tauri::async_runtime::block_on(db::connect()).expect("failed to connect to database");
-    let checker_db = db.clone();
+    alert_checker::spawn_periodic_check(db.clone());
 
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
-        .plugin(tauri_plugin_notification::init())
         .manage(db)
         .manage(AtomicBool::new(false))
-        .setup(move |app| {
-            alert_checker::spawn_periodic_check(app.handle().clone(), checker_db.clone());
-            Ok(())
-        })
         .invoke_handler(tauri::generate_handler![
             commands::bazin::calculate_bazin,
             commands::graham::calculate_graham,
