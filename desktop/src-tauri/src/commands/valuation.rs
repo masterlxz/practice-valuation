@@ -5,10 +5,10 @@ use sea_orm::{
 use serde::Deserialize;
 use serde_json::Value as JsonValue;
 
-use crate::domain::{banks, bazin, dcf, gordon, graham, projected_ceiling, rnav};
+use crate::domain::{banks, bazin, dcf, gordon, graham, projected_ceiling, rim, rnav};
 use crate::entity::{
     banks_inputs, bazin_inputs, dcf_inputs, gordon_inputs, graham_inputs,
-    projected_ceiling_inputs, rnav_inputs, valuation,
+    projected_ceiling_inputs, rim_inputs, rnav_inputs, valuation,
 };
 use crate::error::AppError;
 
@@ -70,6 +70,13 @@ pub async fn get_valuation_inputs(
         "banks" => serde_json::to_value(
             banks_inputs::Entity::find()
                 .filter(banks_inputs::Column::ValuationId.eq(valuation_id))
+                .one(db.inner())
+                .await?
+                .ok_or_else(not_found)?,
+        ),
+        "rim" => serde_json::to_value(
+            rim_inputs::Entity::find()
+                .filter(rim_inputs::Column::ValuationId.eq(valuation_id))
                 .one(db.inner())
                 .await?
                 .ok_or_else(not_found)?,
@@ -217,6 +224,28 @@ pub async fn update_valuation(
                     ..Default::default()
                 })
                 .filter(banks_inputs::Column::ValuationId.eq(request.valuation_id))
+                .exec(db.inner())
+                .await?;
+            (
+                outcome.fair_price,
+                outcome.safety_margin,
+                outcome.verdict.as_str().to_string(),
+            )
+        }
+        "rim" => {
+            let inputs: rim::RimInputs =
+                serde_json::from_value(request.inputs.clone()).map_err(invalid)?;
+            let outcome = rim::calculate(&inputs, request.current_price)?;
+            rim_inputs::Entity::update_many()
+                .set(rim_inputs::ActiveModel {
+                    book_value_per_share: Set(inputs.book_value_per_share),
+                    roe_current: Set(inputs.roe_current),
+                    payout: Set(inputs.payout),
+                    ke: Set(inputs.ke),
+                    fade_years: Set(inputs.fade_years),
+                    ..Default::default()
+                })
+                .filter(rim_inputs::Column::ValuationId.eq(request.valuation_id))
                 .exec(db.inner())
                 .await?;
             (

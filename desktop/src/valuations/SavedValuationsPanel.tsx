@@ -33,6 +33,7 @@ const MODEL_LABELS: Record<string, string> = {
   gordon: "Gordon / DDM",
   dcf: "DCF / FCFF",
   banks: "Banks (P/B)",
+  rim: "RIM (Bancos)",
   rnav: "RNAV",
   projected_ceiling: "Projected Ceiling",
 };

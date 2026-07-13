@@ -89,6 +89,17 @@ export const INPUT_FIELDS: Record<string, InputField[]> = {
     { key: "payout", label: "Payout", format: "percentage" },
     { key: "ke", label: "Required return — Ke", format: "percentage" },
   ],
+  rim: [
+    {
+      key: "book_value_per_share",
+      label: "Book value per share",
+      format: "currency",
+    },
+    { key: "roe_current", label: "Current ROE", format: "percentage" },
+    { key: "payout", label: "Payout", format: "percentage" },
+    { key: "ke", label: "Required return — Ke", format: "percentage" },
+    { key: "fade_years", label: "Fade years — N", format: "integer" },
+  ],
   rnav: [
     {
       key: "landbank",

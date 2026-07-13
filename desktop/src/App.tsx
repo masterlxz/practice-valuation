@@ -4,6 +4,7 @@ import GrahamForm from "./models/GrahamForm";
 import GordonForm from "./models/GordonForm";
 import DcfForm from "./models/DcfForm";
 import BanksForm from "./models/BanksForm";
+import RimForm from "./models/RimForm";
 import RnavForm from "./models/RnavForm";
 import ProjectedCeilingForm from "./models/ProjectedCeilingForm";
 import CryptoScorePanel from "./crypto/CryptoScorePanel";
@@ -28,6 +29,7 @@ const MODELS = {
   gordon: { label: "Gordon / DDM", component: GordonForm },
   dcf: { label: "DCF / FCFF", component: DcfForm },
   banks: { label: "Banks (P/B)", component: BanksForm },
+  rim: { label: "RIM (Bancos)", component: RimForm },
   rnav: { label: "RNAV", component: RnavForm },
   projected_ceiling: {
     label: "Projected Ceiling",

@@ -10,6 +10,7 @@ pub use super::gordon_inputs::Entity as GordonInputs;
 pub use super::graham_inputs::Entity as GrahamInputs;
 pub use super::indicator_thresholds::Entity as IndicatorThresholds;
 pub use super::projected_ceiling_inputs::Entity as ProjectedCeilingInputs;
+pub use super::rim_inputs::Entity as RimInputs;
 pub use super::rnav_inputs::Entity as RnavInputs;
 pub use super::stock_dcf_fundamentals::Entity as StockDcfFundamentals;
 pub use super::stock_dividends_avg::Entity as StockDividendsAvg;

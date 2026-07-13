@@ -22,6 +22,7 @@ pub fn run() {
             commands::gordon::calculate_gordon,
             commands::dcf::calculate_dcf,
             commands::banks::calculate_banks,
+            commands::rim::calculate_rim,
             commands::rnav::calculate_rnav,
             commands::projected_ceiling::calculate_projected_ceiling,
             commands::crypto_indicator::record_crypto_indicator,

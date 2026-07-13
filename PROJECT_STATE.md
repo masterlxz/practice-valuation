@@ -349,7 +349,28 @@ Preco_Justo   = P/B_Justo × VPA
 ```
 **Guarda**: `Ke > g_sustentável`.
 
-#### 6. Incorporadoras (RNAV)
+#### 6. RIM — Lucro Residual (Bancos)
+
+**Quando usar**: bancos e instituições financeiras, como alternativa mais robusta ao modelo Bancos (P/B via ROE-Gordon, seção 5) — em vez de assumir ROE constante pra sempre, projeta o ROE convergindo (fade linear) do patamar atual até o próprio Ke (custo de capital) ao longo de N anos explícitos, sob a leitura de que a vantagem competitiva de um banco erode até ele criar exatamente zero lucro econômico no limite. Não precisa de valor terminal separado: em t=N o ROE já é Ke, então o lucro residual dali em diante é zero por construção. Quando ROE atual = Ke, o preço justo bate exatamente no valor patrimonial — mesmo caso particular do modelo Bancos (P/B_Justo = 1 quando ROE = Ke).
+
+| Input | Unidade |
+|---|---|
+| VPA (Valor Patrimonial por Ação) | R$/ação |
+| ROE Atual | % |
+| Payout | % |
+| Ke (retorno exigido, também o ROE de convergência) | % |
+| N — Anos de Fade | inteiro |
+
+```
+Para t = 1..N:
+  ROE_t          = ROE_atual + (Ke − ROE_atual) × (t/N)
+  LucroResid_t   = (ROE_t − Ke) × VPA_(t-1)
+  VPA_t          = VPA_(t-1) × (1 + ROE_t × (1 − Payout))
+Preco_Justo       = VPA0 + Σ VP(LucroResid_t)
+```
+**Guarda**: `N >= 1`.
+
+#### 7. Incorporadoras (RNAV)
 
 **Quando usar**: construtoras/incorporadoras — o "estoque" é imóvel, não dá pra projetar FCFF de forma suave trimestre a trimestre.
 
@@ -366,7 +387,7 @@ RNAV/Ação  = RNAV_Total / Nº_Ações
 ```
 (`RNAV/Ação` entra no lugar de `preco_justo` na regra geral.)
 
-#### 7. Preço Teto Projetivo
+#### 8. Preço Teto Projetivo
 
 **Quando usar**: mesma lógica do Bazin, mas trazendo N anos de crescimento esperado pra frente e descontando a valor presente — útil quando se quer o teto "olhando pra frente", não só o dividendo de hoje.
 
@@ -416,6 +437,7 @@ Diferente de ação (1x/ano), aqui é um **score contínuo**: cada indicador vir
 - [x] 3.2 — Modelar cada metodologia (dos 7 modelos acima) como função pura Rust: inputs (tabela específica do modelo) → resultado (`preco_justo`, `margem_seguranca`, `veredito`), aplicando as guardas de erro — **concluído na Sessão 3**: os 7 modelos (Bazin, Graham, Gordon/DDM, DCF/FCFF, Bancos, RNAV, Preço Teto Projetivo) fechados ponta a ponta
 - [x] 3.3 — Motor do score cripto — **concluído na Sessão 4**: sinal verde/neutro/vermelho por indicador com threshold configurável (tabela `indicator_thresholds`), leituras salvas em série temporal (`crypto_indicators`), score somado no front (verdes/9). Ver Log de Sessões pra detalhes de schema/domínio
 - [ ] 3.4 — Permitir salvar quantos cálculos o usuário quiser por ativo (já é a natureza do schema — cada linha é um cálculo, nada sobrescreve), todos comparáveis lado a lado na UI — a parte de schema já está resolvida, falta só a tela de comparação (Fase 4)
+- [x] 3.5 — 8º modelo, RIM — Lucro Residual (Bancos) — **concluído na Sessão 17**: generaliza o modelo Bancos (seção 5) permitindo o ROE convergir (fade) até o próprio Ke ao longo de N anos, em vez de assumir ROE constante pra sempre. Ver seção 6 acima pra fórmula/guarda e Log de Sessões pra detalhes de schema/domínio
 
 ---
 
@@ -883,6 +905,15 @@ Planejado com `/plan` na Sessão 10 (pesquisa real contra a doc do Gemini via `W
 - **Achado de ambiente**: `.cache/cvm_dfp/` tinha ficado com dono `root` de uma sessão anterior, bloqueando a escrita dos zips novos (2021-2024) que essa fatia precisou baixar pela primeira vez. Resolvido com `docker compose run --rm --user root ... chown -R 1000:1000 .cache` — o `chown` de dentro do container só funciona como root explícito (`--user root`), o container padrão (uid 1000, definido no `docker-compose.yml`) não tem permissão nem pra isso
 - **Testado contra dado real**: `fetch_payout` pros 5 tickers já usados nesta sessão — BPAC11 28,2% (quase igual ao ano único, 28,5%, empresa com payout consistente), BBAS3 7,8%, ITUB4 57,2% (era 108,6% num ano só), VALE3 61,4% (era 275,6% — melhora enorme, valor plausível pra mineradora com política de distribuição generosa), BBDC4 15,3% (era 0%, bug corrigido). `python3 main.py --ticker BBDC4` de ponta a ponta confirmou a gravação real no banco
 - **Marco**: payout deixou de ser vulnerável a um ano fora da curva, e o bug de coluna zerada específico do Bradesco foi corrigido sem afetar as empresas que já estavam certas
+
+### 2026-07-12 — Sessão 17
+
+- Usuário pediu um 8º modelo de valuation: RIM (Residual Income Model / Lucro Residual) pra bancos, inicialmente pensado como "método principal" pro setor financeiro
+- Investigação prévia mostrou que o modelo Bancos (P/B via ROE-Gordon, seção 5) já é matematicamente um RIM de estágio único (dá pra derivar `P/B = (ROE-g)/(Ke-g)` direto da fórmula de lucro residual com crescimento constante) — um RIM de estágio único seria a mesma conta com outro nome, não um método novo de verdade
+- Decidido com o usuário (via `/plan`, 3 perguntas resolvidas): (1) RIM multi-estágio, com ROE em fade linear do valor atual pro terminal ao longo de N anos explícitos, antes de cair num valor terminal em regime estacionário — ganho real sobre o Bancos; (2) sem detecção de setor "financeiro" (não existe esse conceito no schema hoje, e criar do zero — CVM `cad_cia_aberta`/`SETOR_ATIV` ou lista manual de tickers — foi descartado como escopo desnecessário); (3) sem lógica de "método principal" na UI — RIM entra só como mais um item no dropdown de modelos, ao lado do Bancos
+- **Código**: 8º modelo completo, seguindo o mesmo padrão mecânico dos outros 7 (migration `rim_inputs` → entity → `domain/rim.rs` → `commands/rim.rs` → registro em `lib.rs`/`commands/valuation.rs` → `RimForm.tsx` → 3 dicionários de UI: `App.tsx`, `inputFields.ts`, `SavedValuationsPanel.tsx`, `EditValuationForm.tsx`). `SYSTEM_REPERTOIRE` do chat de IA (`commands/chat.rs`) atualizado com o 8º modelo
+- **Ajuste em cima do desenho inicial, ainda na mesma sessão**: o usuário pediu pra unificar o ROE terminal com o Ke (em vez de dois inputs separados) — o fade converge direto pro custo de capital, não pra um patamar arbitrário à parte. Isso simplificou o modelo pra 5 inputs (não 6: sai `roe_terminal`) e eliminou de vez o valor terminal e a guarda `Ke > g_terminal`: como em t=N o ROE já é exatamente Ke, o lucro residual dali em diante é zero por construção, sem perpetuidade nem divisão nenhuma pra guardar. Migration/entity/domain/command/formulário/`inputFields.ts`/docs todos ajustados; a migration nova (ainda não commitada, 0 linhas gravadas) foi editada no lugar em vez de ganhar uma migration de correção em cima, já que não havia dado real em jogo
+- **Teste de consistência**: `domain/rim.rs::tests::matches_book_value_when_roe_equals_ke` — quando `roe_current == ke`, o RIM multi-estágio precisa devolver exatamente o valor patrimonial (mesmo resultado do `banks.rs` nesse caso particular, onde `P/B_Justo = 1`) — prova que o RIM é uma generalização correta do modelo existente, não um cálculo divergente
 
 **Pendências pra próxima sessão** (em ordem):
 1. Fase 7 (chat de IA): **7.9.1** (redesenho do painel de chat pra tamanho fixo tipo "tela de celular") é o ponto de partida natural — só CSS/layout, sem mudança de backend, não depende de nenhuma etapa seguinte, e é ganho visual rápido. Depois vem 7.9.2 (storage de múltiplas chaves nomeadas, maior risco técnico da 7.9). 7.6/7.7 (Claude/OpenAI de verdade) seguem disponíveis como alternativa mais simples caso o usuário prefira essa linha em vez da 7.9

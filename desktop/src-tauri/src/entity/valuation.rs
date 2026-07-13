@@ -37,6 +37,8 @@ pub enum Relation {
     GrahamInputs,
     #[sea_orm(has_many = "super::projected_ceiling_inputs::Entity")]
     ProjectedCeilingInputs,
+    #[sea_orm(has_many = "super::rim_inputs::Entity")]
+    RimInputs,
     #[sea_orm(has_many = "super::rnav_inputs::Entity")]
     RnavInputs,
 }
@@ -80,6 +82,12 @@ impl Related<super::graham_inputs::Entity> for Entity {
 impl Related<super::projected_ceiling_inputs::Entity> for Entity {
     fn to() -> RelationDef {
         Relation::ProjectedCeilingInputs.def()
+    }
+}
+
+impl Related<super::rim_inputs::Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::RimInputs.def()
     }
 }
 
