@@ -4,15 +4,9 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import type { AppError } from "../types";
 import type { GeminiContent } from "./types";
 import ApiKeyGate from "./ApiKeyGate";
-import {
-  Sheet,
-  SheetContent,
-  SheetHeader,
-  SheetTitle,
-} from "@/components/ui/sheet";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { SendIcon } from "lucide-react";
+import { SendIcon, XIcon } from "lucide-react";
 
 function MessageBubble({ message }: { message: GeminiContent }) {
   const isUser = message.role === "user";
@@ -60,6 +54,17 @@ function ChatPanel({
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight });
   }, [history, sendMutation.isPending]);
 
+  // The floating panel has no modal overlay to click outside of anymore, so
+  // Escape-to-close (free before via Radix Dialog) needs a manual listener.
+  useEffect(() => {
+    if (!open) return;
+    function handleEscape(event: globalThis.KeyboardEvent) {
+      if (event.key === "Escape") onOpenChange(false);
+    }
+    document.addEventListener("keydown", handleEscape);
+    return () => document.removeEventListener("keydown", handleEscape);
+  }, [open, onOpenChange]);
+
   function handleSend() {
     const text = input.trim();
     if (!text || sendMutation.isPending) return;
@@ -87,62 +92,77 @@ function ChatPanel({
 
   const hasKey = keyStatusQuery.data === true;
 
+  if (!open) return null;
+
   return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="right" className="flex w-full flex-col sm:max-w-md">
-        <SheetHeader>
-          <SheetTitle>Chat de IA</SheetTitle>
-        </SheetHeader>
+    <div
+      role="dialog"
+      aria-label="Chat de IA"
+      className="fixed right-6 bottom-24 z-50 flex h-[42rem] max-h-[80vh] w-[22.5rem] max-w-[calc(100vw-3rem)] flex-col overflow-hidden rounded-xl border bg-popover text-popover-foreground shadow-2xl duration-200 animate-in fade-in-0 slide-in-from-bottom-4"
+    >
+      <div className="flex items-center justify-between gap-2 border-b p-4">
+        <p className="font-heading text-base font-medium text-foreground">
+          Chat de IA
+        </p>
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon-sm"
+          onClick={() => onOpenChange(false)}
+        >
+          <XIcon />
+          <span className="sr-only">Fechar chat</span>
+        </Button>
+      </div>
 
-        {keyStatusQuery.isPending ? null : !hasKey ? (
-          <ApiKeyGate />
-        ) : (
-          <>
-            <div
-              ref={scrollRef}
-              className="flex flex-1 flex-col gap-3 overflow-y-auto px-4"
-            >
-              {history.length === 0 && (
-                <p className="text-sm text-muted-foreground">
-                  Pergunte sobre suas valuations salvas ou alertas.
-                </p>
-              )}
-              {history.map((message, index) => (
-                <MessageBubble key={index} message={message} />
-              ))}
-              {sendMutation.isPending && (
-                <div className="flex justify-start">
-                  <div className="max-w-[85%] rounded-lg bg-muted px-3 py-2 text-sm text-muted-foreground">
-                    Pensando...
-                  </div>
+      {keyStatusQuery.isPending ? null : !hasKey ? (
+        <ApiKeyGate />
+      ) : (
+        <>
+          <div
+            ref={scrollRef}
+            className="flex flex-1 flex-col gap-3 overflow-y-auto px-4 py-3"
+          >
+            {history.length === 0 && (
+              <p className="text-sm text-muted-foreground">
+                Pergunte sobre suas valuations salvas ou alertas.
+              </p>
+            )}
+            {history.map((message, index) => (
+              <MessageBubble key={index} message={message} />
+            ))}
+            {sendMutation.isPending && (
+              <div className="flex justify-start">
+                <div className="max-w-[85%] rounded-lg bg-muted px-3 py-2 text-sm text-muted-foreground">
+                  Pensando...
                 </div>
-              )}
-              {sendMutation.isError && (
-                <p className="text-red-600">{sendMutation.error.message}</p>
-              )}
-            </div>
+              </div>
+            )}
+            {sendMutation.isError && (
+              <p className="text-red-600">{sendMutation.error.message}</p>
+            )}
+          </div>
 
-            <div className="flex gap-2 p-4">
-              <Input
-                value={input}
-                onChange={(e) => setInput(e.currentTarget.value)}
-                onKeyDown={handleKeyDown}
-                disabled={sendMutation.isPending}
-                placeholder="Digite sua pergunta..."
-              />
-              <Button
-                type="button"
-                size="icon"
-                onClick={handleSend}
-                disabled={!input.trim() || sendMutation.isPending}
-              >
-                <SendIcon />
-              </Button>
-            </div>
-          </>
-        )}
-      </SheetContent>
-    </Sheet>
+          <div className="flex gap-2 border-t p-4">
+            <Input
+              value={input}
+              onChange={(e) => setInput(e.currentTarget.value)}
+              onKeyDown={handleKeyDown}
+              disabled={sendMutation.isPending}
+              placeholder="Digite sua pergunta..."
+            />
+            <Button
+              type="button"
+              size="icon"
+              onClick={handleSend}
+              disabled={!input.trim() || sendMutation.isPending}
+            >
+              <SendIcon />
+            </Button>
+          </div>
+        </>
+      )}
+    </div>
   );
 }
 
