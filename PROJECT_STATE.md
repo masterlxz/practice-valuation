@@ -39,6 +39,7 @@ O usuário não é iniciante em programação (ver Fase 2 abaixo — já desenho
 - **No código Rust especificamente**: ir com calma e explicar de verdade — o quê cada trecho faz, por que a sintaxe é do jeito que é, e comparar com o equivalente em Python quando ajudar (ex: `struct` ~ `dataclass`, `Result<T, E>` ~ exceção/erro explícito em vez de try/except, ownership/borrow como conceito novo sem equivalente direto em Python)
 - Perguntar se o usuário entendeu antes de avançar quando o conceito for novo
 - Nunca escrever um bloco grande de código sem explicar o que faz e por quê
+- **(Sessão 20, pedido explícito, vale pra tudo daqui pra frente)**: sempre que for explicar como algo funciona (arquitetura, fluxo de dado, "como a tela pega o que tá no banco", etc.), explicar em linguagem simples e prática, sem jargão técnico solto, ancorado no código real (arquivo/trecho que o usuário pode abrir e seguir) — de preferência com um passo a passo concreto usando uma feature que o usuário acabou de usar, em vez de descrição abstrata
 
 ---
 
@@ -86,7 +87,7 @@ Fase 5 — Monitoramento & Alertas                  [x] Completa — cadastro (5
 Fase 6 — Publicação (GitHub público)               [ ] Não iniciada
 Fase 7 — Chat de IA Integrado                      [~] Em andamento (7.1 a 7.5 completas — storage seguro da chave, cliente HTTP do Gemini, contexto de leitura do banco no systemInstruction, painel de chat na UI e abstração multi-provider (`Provider` enum, `ask_ai`), todas validadas ponta a ponta incl. no app real; falta 7.6/7.7 (Claude/OpenAI de verdade) e a ideia nova 7.9 (config de múltiplas chaves nomeadas + redesenho do painel); ver Fases Detalhadas)
 Fase 8 — Sync Multi-Dispositivo via TruthID+IPFS  [ ] Brainstorm apenas — nenhuma decisão de arquitetura tomada, ver Fases Detalhadas
-Fase 9 — Tela de Pesquisa de Ação (Stock Lookup)  [~] Em andamento (9.1 completa — cotação/fundamentos/DCF/SMA/CAGR/P-L/P-VP/valuation salva/anotações, testada ponta a ponta no app real; 9.2–9.5 só registradas como pendência, ver Fases Detalhadas)
+Fase 9 — Tela de Pesquisa de Ação (Stock Lookup)  [~] Em andamento (9.1 e 9.5 completas; 9.2–9.4 seguem como pendência, ver Fases Detalhadas)
 ```
 
 ---
@@ -575,7 +576,7 @@ abaixo continua em aberto). Detalhe completo no Log de Sessões, entrada Sessão
 - [ ] 9.2 — Mais indicadores na tela: dívida líquida/EBITDA, EV/EBIT, margem líquida
 - [ ] 9.3 — Gráfico de histórico de dividendos por mês e por ano — usuário já avisou que reconhece que é mais complexo que o resto desta fase
 - [ ] 9.4 — Ícone/logo da empresa na tela, se der pra achar uma fonte gratuita de imagens por ticker
-- [ ] 9.5 — Reorganizar a navegação: "Saved Valuations" deixa de ser aba própria na navegação principal e vira um botão dentro da aba "Valuation" (um cantinho da tela leva pra tela que já existe hoje) — pedido de UX, ainda não decidido em detalhe (onde exatamente o botão fica, se `SavedValuationsPanel` continua montado sempre ou só ao navegar pra lá)
+- [x] 9.5 — Reorganizar a navegação: **concluída na Sessão 20** — "Saved Valuations" saiu de `SECTIONS` (não é mais aba própria); a aba "Valuation" ganhou um estado local (`valuationView: "form" | "saved"`) que troca entre o formulário de cálculo e o `SavedValuationsPanel`, com um botão "Saved Valuations" no canto (ao lado do seletor de modelo) e um botão "← Back" pra voltar. `SavedValuationsPanel` desmonta/remonta ao trocar de view (reseta pra lista sempre que volta), decisão simples aceita sem precisar de estado persistente. `npx tsc --noEmit` limpo, aplicado via HMR no app rodando e confirmado pelo usuário ("o botão do saved valuations funcionou")
 
 ---
 
@@ -996,6 +997,8 @@ abaixo continua em aberto). Detalhe completo no Log de Sessões, entrada Sessão
 - **Nova aba "Stock Lookup"** (Fase 9, ideia levantada nesta sessão a partir do pedido original do usuário por uma média móvel de 200 dias): detalhe técnico completo na Fase 9 acima (SMA 50/100/200, CAGR 5/10 anos, tabelas `stock_technicals`/`stock_notes`, o bug de nome de coluna repetido e como foi corrigido, busca cache-aware no frontend). Testado de ponta a ponta pelo próprio usuário no app real (`./desktop/dev.sh`) — aprovado.
 - **Pedidos de continuação, só registrados** (ver Fase 9, 9.2–9.5): mais indicadores (dívida líquida/EBITDA, EV/EBIT, margem líquida), gráfico de histórico de dividendos por mês/ano, ícone da empresa, e mover "Saved Valuations" pra dentro da aba "Valuation" como botão em vez de aba própria.
 - **Lembrete do usuário sobre o placar cripto (2/9 indicadores automatizados)**: revisada a Fase 2.3 — dos 7 indicadores manuais restantes, 5 já têm bloqueio documentado (MVRV, Puell, Exchange Netflow sem fonte grátis; Endereços Ativos via Etherscan é Pro-only; Staking Yield sem free tier de verdade), mas **2 nunca foram de fato investigados**: NVT Ratio (só "Parcial" na spec original) e Fees de Rede vs Emissão (marcado automatizável via `ultrasound.money`, mesma fonte já usada pro Net Issuance, mas nunca implementado). Usuário confirmou explicitamente **só registrar por enquanto**, não investigar nesta sessão.
+- **Fase 9.5 concluída** — ver etapa 9.5 acima. Mudança só de frontend (`App.tsx`), sem migration/comando novo.
+- **Pedido novo do usuário**: entender a arquitetura na prática, sem jargão — explicado o fluxo tela → comando Rust → subprocess Python → arquivo SQLite compartilhado → tela lê de novo, usando o próprio Stock Lookup como exemplo real. Usuário pediu explicitamente que esse estilo de explicação (linguagem simples, código real, passo a passo) vire padrão daqui pra frente sempre que algo precisar ser explicado — registrado na diretriz de ensino (ver também memória `project-collaboration-style` do Claude).
 
 ---
 

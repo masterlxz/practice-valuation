@@ -16,6 +16,7 @@ import ChatPanel from "./chat/ChatPanel";
 import ChatToggleButton from "./chat/ChatToggleButton";
 import type { GeminiContent } from "./chat/types";
 import Field from "./components/Field";
+import { Button } from "@/components/ui/button";
 import {
   Select,
   SelectContent,
@@ -45,15 +46,17 @@ const SECTIONS = {
   valuation: "Valuation",
   lookup: "Stock Lookup",
   crypto: "Crypto Score",
-  saved: "Saved Valuations",
   alerts: "Alerts",
   truthid: "TruthID Sync",
 } as const;
+
+type ValuationView = "form" | "saved";
 
 type SectionKey = keyof typeof SECTIONS;
 
 function App() {
   const [section, setSection] = useState<SectionKey>("valuation");
+  const [valuationView, setValuationView] = useState<ValuationView>("form");
   const [selectedModel, setSelectedModel] = useState<ModelKey>("bazin");
   const SelectedForm = MODELS[selectedModel].component;
   const [chatOpen, setChatOpen] = useState(false);
@@ -75,25 +78,50 @@ function App() {
           </TabsList>
 
           <TabsContent value="valuation" className="flex flex-col gap-6">
-            <Field label="Valuation model">
-              <Select
-                value={selectedModel}
-                onValueChange={(value) => setSelectedModel(value as ModelKey)}
-              >
-                <SelectTrigger className="w-full">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {Object.entries(MODELS).map(([key, { label }]) => (
-                    <SelectItem key={key} value={key}>
-                      {label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </Field>
+            {valuationView === "form" ? (
+              <>
+                <div className="flex items-end justify-between gap-4">
+                  <Field label="Valuation model" className="flex-1">
+                    <Select
+                      value={selectedModel}
+                      onValueChange={(value) => setSelectedModel(value as ModelKey)}
+                    >
+                      <SelectTrigger className="w-full">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {Object.entries(MODELS).map(([key, { label }]) => (
+                          <SelectItem key={key} value={key}>
+                            {label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </Field>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => setValuationView("saved")}
+                  >
+                    Saved Valuations
+                  </Button>
+                </div>
 
-            <SelectedForm />
+                <SelectedForm />
+              </>
+            ) : (
+              <>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="w-fit"
+                  onClick={() => setValuationView("form")}
+                >
+                  ← Back
+                </Button>
+                <SavedValuationsPanel />
+              </>
+            )}
           </TabsContent>
 
           <TabsContent value="lookup">
@@ -102,10 +130,6 @@ function App() {
 
           <TabsContent value="crypto">
             <CryptoScorePanel />
-          </TabsContent>
-
-          <TabsContent value="saved">
-            <SavedValuationsPanel />
           </TabsContent>
 
           <TabsContent value="alerts">
