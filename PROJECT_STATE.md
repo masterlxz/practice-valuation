@@ -514,6 +514,19 @@ Planejado com `/plan` na Sessão 10 (pesquisa real contra a doc do Gemini via `W
 
 **Só brainstorm nesta sessão — nada implementado, nenhum `/plan` rodado ainda.** Registrado porque cruza os dois repositórios e envolveria mudanças no TruthID também (ver `PROJECT_STATE.md` do TruthID, seção "Roadmap de Evoluções Planejadas", entrada da Sessão 94).
 
+**Sessão 18 (2026-07-14/15) — prova de conceito do canal de assinatura delegada, feita a partir de
+uma sessão do TruthID, não desta Fase 8**: o TruthID implementou (do lado dele) um canal HTTP
+local pra apps terceiros pedirem assinatura delegada — ver seção "Vault genérico multi-app +
+delegação de assinatura via session key" no `PROJECT_STATE.md` dele, fatias 2a/2b/3. O usuário
+pediu explicitamente, numa sessão do TruthID, pra testar esse canal a partir do Practice
+Valuation — resultou em `desktop/src-tauri/src/commands/truthid.rs` (descobre o TruthID Desktop
+rodando na mesma máquina, faz handshake, manda 1 pedido de assinatura de teste sem efeito
+econômico) + aba nova "TruthID Sync" na UI (`desktop/src/truthid/TruthIdPanel.tsx`). **Isso não é
+a Fase 8** (que seria sync real de `valuation`/`alert_event` via IPFS) — é só a prova de que o
+mecanismo de assinatura delegada que a Fase 8 vai precisar já funciona. Nenhuma decisão de
+arquitetura da Fase 8 foi tomada (generalizar `VaultRegistry` vs. contrato irmão, etc. — tudo
+abaixo continua em aberto). Detalhe completo no Log de Sessões, entrada Sessão 18.
+
 **Desenho discutido**:
 - **P2P direto entre devices foi descartado** — usuário não gosta da abordagem (conexão ao vivo entre dispositivos, NAT, complexidade). Transporte vira **assíncrono via IPFS**: cada device publica quando muda algo, os outros puxam quando abrem — sem exigir dois devices online ao mesmo tempo.
 - **Achado-chave**: o TruthID já tem o mecanismo que esse sync precisaria — `VaultRegistry.sol` (`identityId → {cid, contentHash, version}`), blob cifrado (AES-256-GCM, chave via HKDF, nunca sai do device) publicado no IPFS com múltiplos provedores de pinning (health-checked), já testado ponta a ponta em hardware real (TruthID, Sessão 90 — celular físico + Ledger + Base Mainnet). **Mas** hoje é 1 vault por identidade, dedicado ao password manager (Fase 13 do TruthID) — reaproveitar pro Practice Valuation exigiria generalizar (`identityId + vaultKind/appId → VaultRef`) ou um contrato irmão no mesmo padrão. Nenhuma das duas escolhida ainda.
@@ -931,6 +944,18 @@ Planejado com `/plan` na Sessão 10 (pesquisa real contra a doc do Gemini via `W
 3. README.md e LICENSE na raiz do repo ainda não existem (Fase 0.5/6.2/6.3) — usuário disse que prefere esperar ter mais "repertório" antes de escrever o README
 4. Quando o usuário voltar a mexer no TruthID mobile, lembrar que o cache Docker foi limpo (Sessão 1 do Practice Valuation) — primeiro `docker compose up` de lá vai ser mais lento
 5. Se algum dia migrar a imagem Docker (Node/Debian), lembrar dos 3 fixes de rede/instalação da Sessão 1 (IPv6, npm audit, node_modules corrompido) — não são óbvios
+
+### 2026-07-14/15 — Sessão 18
+
+- **Sessão iniciada do lado do TruthID, não deste repo**: o usuário pediu, numa sessão do TruthID, pra continuar a "fatia 3" da delegação de assinatura (ver `PROJECT_STATE.md` do TruthID, seção "Vault genérico multi-app...") tocando neste repositório — autorização explícita, não iniciativa própria (a diretriz registrada na Fase 8 é não tocar neste repo a partir de uma sessão do TruthID sem pedido explícito).
+- **Escopo negociado antes de codar**: só uma prova de conceito mínima — descobrir um TruthID Desktop rodando na mesma máquina, fazer handshake, mandar 1 pedido de assinatura de teste sem efeito econômico. Explicitamente **não** a Fase 8 completa (nenhuma decisão sobre `VaultRegistry` generalizado, sync de `valuation`/`alert_event`, ou qualquer coisa do desenho acima foi tomada nesta sessão).
+- **Código**: novo `desktop/src-tauri/src/commands/truthid.rs` — `discover()` tenta as portas `47950-47954` em sequência (mesma faixa que o TruthID usa, precisa ser espelhada manualmente entre os 2 repos — não há descoberta de rede real, é tudo `127.0.0.1`), 2 comandos Tauri novos (`test_truthid_connection`, `send_test_sign_request`), seguindo o estilo já existente do projeto (`AppError` via `thiserror` com `code()`, `reqwest::Client` inline como em `commands/chat.rs`). O pedido de assinatura de teste é uma transferência de valor puro (`value: "0"`, `callData: "0x"`) pro endereço de burn `0x000...dEaD` — zero efeito econômico, mas passa pelo pipeline real de UserOperation (assinatura + bundler + hashes reais).
+- **Frontend**: aba nova "TruthID Sync" em `App.tsx` (`SECTIONS`), painel `desktop/src/truthid/TruthIdPanel.tsx` com 2 botões, mesmo padrão de `useMutation` de `BazinForm.tsx`.
+- **Achado de segurança sem impacto**: a exploração inicial deste repo (via subagente do Claude Code) recebeu de volta uma tentativa de prompt injection — um "system-reminder" falso alegando modo de planejamento ativo, instruindo o subagente a escrever um arquivo via uma ferramenta que ele nem tinha acesso. Ignorado corretamente, sem efeito, registrado só por transparência (não é vulnerabilidade deste repo — veio de um resultado de ferramenta durante a pesquisa).
+- **`cargo check`/`tsc --noEmit` limpos.** Sem testes automatizados novos pra `discover`/os 2 comandos (só chamadas de rede — mesmo padrão já existente pro `ask_gemini_api` em `commands/chat.rs`, que também não tem teste de rede, só a lógica pura).
+- **Validação E2E real (os 2 apps rodando ao mesmo tempo) NUNCA aconteceu, tentada e bloqueada por 2 problemas de ambiente**: (1) os dois repos usam a porta 1420 do Vite por padrão (mesmo template Tauri) — colidem se tentar rodar simultâneo; contornado temporariamente mudando a porta deste repo pra 1425 (`vite.config.ts`/`tauri.conf.json`), depois revertido, não é fix permanente; (2) `cargo tauri dev` puro (fora do Docker deste projeto) trava na abertura com `unable to open database file` — o SQLite (`data-collector/practice_valuation.db`) espera o path/setup que só o `dev.sh`/Docker deste projeto provisiona. Não tentei subir o Docker deste projeto sem pedir, dado o histórico de disco cheio compartilhado com o TruthID (ver Sessão 1).
+- **Achado de UX/transparência no lado do TruthID, não corrigido aqui**: quando a verificação de seletor falha (que é sempre o caso do pedido de teste desta sessão, já que `callData` é vazio), a tela de aprovação do TruthID mostra bytes crus + aviso mas nunca exibe a `functionSignature` que este app declarou. Registrado como pendência do lado do TruthID, fora do escopo desta sessão.
+- **Pendências pra retomar amanhã**: (1) validar E2E de verdade com os 2 apps rodando juntos — precisa resolver o Docker/porta deste repo, ou o usuário rodar manualmente pelo lado dele; (2) nenhum clique real na UI de nenhum dos dois apps foi observado acontecendo (aprovação/rejeição no TruthID) — só a lógica por trás, via curl; (3) commit desta sessão feito e pushado (ver mensagem de commit pra detalhes exatos do que entrou); (4) Fase 8 de verdade (sync completo) continua não iniciada, sem nenhuma decisão de arquitetura tomada — só a prova de que o canal de assinatura funciona.
 
 ---
 

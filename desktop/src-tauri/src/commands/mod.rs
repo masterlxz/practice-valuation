@@ -11,4 +11,5 @@ pub mod graham;
 pub mod projected_ceiling;
 pub mod rim;
 pub mod rnav;
+pub mod truthid;
 pub mod valuation;

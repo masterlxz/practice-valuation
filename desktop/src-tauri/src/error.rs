@@ -30,6 +30,10 @@ pub enum AppError {
     Http(#[from] reqwest::Error),
     #[error("Gemini API error: {0}")]
     GeminiApi(String),
+    #[error("could not find a TruthID Desktop instance running on this machine")]
+    TruthIdNotFound,
+    #[error("TruthID error: {0}")]
+    TruthId(String),
 }
 
 impl AppError {
@@ -49,6 +53,8 @@ impl AppError {
             AppError::ProviderNotImplemented(_) => "PROVIDER_NOT_IMPLEMENTED",
             AppError::Http(_) => "HTTP_ERROR",
             AppError::GeminiApi(_) => "GEMINI_API_ERROR",
+            AppError::TruthIdNotFound => "TRUTHID_NOT_FOUND",
+            AppError::TruthId(_) => "TRUTHID_ERROR",
         }
     }
 }

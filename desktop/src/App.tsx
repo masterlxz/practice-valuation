@@ -10,6 +10,7 @@ import ProjectedCeilingForm from "./models/ProjectedCeilingForm";
 import CryptoScorePanel from "./crypto/CryptoScorePanel";
 import SavedValuationsPanel from "./valuations/SavedValuationsPanel";
 import AlertsPanel from "./alerts/AlertsPanel";
+import TruthIdPanel from "./truthid/TruthIdPanel";
 import ChatPanel from "./chat/ChatPanel";
 import ChatToggleButton from "./chat/ChatToggleButton";
 import type { GeminiContent } from "./chat/types";
@@ -44,6 +45,7 @@ const SECTIONS = {
   crypto: "Crypto Score",
   saved: "Saved Valuations",
   alerts: "Alerts",
+  truthid: "TruthID Sync",
 } as const;
 
 type SectionKey = keyof typeof SECTIONS;
@@ -102,6 +104,10 @@ function App() {
 
           <TabsContent value="alerts">
             <AlertsPanel />
+          </TabsContent>
+
+          <TabsContent value="truthid">
+            <TruthIdPanel />
           </TabsContent>
         </Tabs>
       </main>
