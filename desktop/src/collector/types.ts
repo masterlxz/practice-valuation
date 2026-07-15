@@ -42,6 +42,17 @@ export type StockDcfFundamentals = {
   revenue: number | null;
 };
 
+export type StockDividendPayment = {
+  id: number;
+  ticker: string;
+  payment_date: string;
+  amount: number;
+  price_at_payment: number | null;
+  yield_pct: number | null;
+  source: string;
+  fetched_at: string;
+};
+
 export type StockTechnicals = {
   id: number;
   ticker: string;

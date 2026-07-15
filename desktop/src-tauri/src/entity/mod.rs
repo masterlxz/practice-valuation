@@ -16,6 +16,7 @@ pub mod rim_inputs;
 pub mod rnav_inputs;
 pub mod stock_dcf_fundamentals;
 pub mod stock_dividends_avg;
+pub mod stock_dividend_payments;
 pub mod stock_fundamentals;
 pub mod stock_notes;
 pub mod stock_quotes;

@@ -46,6 +46,7 @@ pub fn run() {
             commands::collector::list_stock_dividends_avg,
             commands::collector::list_stock_dcf_fundamentals,
             commands::collector::list_stock_technicals,
+            commands::collector::list_stock_dividend_payments,
             commands::stock_notes::list_stock_notes,
             commands::stock_notes::save_stock_note,
             commands::truthid::test_truthid_connection,

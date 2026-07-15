@@ -219,6 +219,56 @@ def collect_stock_technicals(tickers: list[str]) -> list[dict]:
     return technicals
 
 
+def collect_stock_dividend_payments(tickers: list[str]) -> list[dict]:
+    """Grava o histórico de pagamentos individuais (não o resumo em
+    `stock_dividends_avg`) — usa `INSERT OR IGNORE` num índice único
+    `(ticker, payment_date)` (ver migration) em vez do `INSERT` simples do
+    resto do coletor, porque isso é fato histórico que não muda: rodar de
+    novo (ex. botão "Refresh data" da tela) não deve duplicar pagamento já
+    gravado, só acrescentar um pagamento novo desde a última coleta.
+    """
+    if not tickers:
+        return []
+
+    payments = acoes_yahoo.fetch_dividend_payments(tickers)
+
+    conn = sqlite3.connect(DB_PATH)
+    conn.execute("PRAGMA journal_mode=WAL")
+    now = datetime.now(timezone.utc).isoformat()
+    changes_before = conn.total_changes
+    conn.executemany(
+        "INSERT OR IGNORE INTO stock_dividend_payments "
+        "(ticker, payment_date, amount, price_at_payment, yield_pct, source, fetched_at) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?)",
+        [
+            (
+                item["ticker"],
+                item["payment_date"],
+                item["amount"],
+                item["price_at_payment"],
+                item["yield_pct"],
+                "yahoo_finance",
+                now,
+            )
+            for item in payments
+        ],
+    )
+    # `INSERT OR IGNORE` faz `executemany` silenciosamente pular duplicatas —
+    # `conn.total_changes` (não `cursor.rowcount`, que não é confiável com
+    # `executemany`) é o jeito certo de saber quantas linhas realmente novas
+    # entraram, pro print de baixo não anunciar "atualizado" pagamento que já
+    # estava salvo.
+    new_count = conn.total_changes - changes_before
+    conn.commit()
+    conn.close()
+
+    print(
+        f"Fetched {len(payments)} dividend payment(s) from source, "
+        f"{new_count} new (rest already saved)"
+    )
+    return payments
+
+
 def _classify_signal(raw_value: float, green_boundary: float, red_boundary: float) -> str:
     """Mirrors `src-tauri/src/domain/crypto_score.rs::classify`.
 
@@ -360,6 +410,8 @@ def main(ticker: str | None = None) -> int:
             f"CAGR 10y {'n/a' if cagr_10y is None else f'{cagr_10y:.1f}%'}"
         )
     print(f"Updated {len(technicals)} technicals record(s)")
+
+    collect_stock_dividend_payments(tickers)
 
     return 0
 

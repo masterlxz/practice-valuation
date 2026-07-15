@@ -125,11 +125,15 @@ def fetch_dividends_avg(tickers: list[str]) -> list[dict]:
 
 
 def _closest_close(
-    timestamps: list[int], closes: list[float | None], target_ts: float
+    timestamps: list[int],
+    closes: list[float | None],
+    target_ts: float,
+    tolerance_days: float = CAGR_ANCHOR_TOLERANCE_DAYS,
 ) -> float | None:
     """Fecho mais próximo de `target_ts`, ignorando candles sem pregão
     (`close=None`). Retorna `None` se o mais próximo estiver fora de
-    `CAGR_ANCHOR_TOLERANCE_DAYS` (histórico insuficiente pra esse período).
+    `tolerance_days` (histórico insuficiente, ou nenhum candle perto o
+    bastante da data pedida).
     """
     best_ts = None
     best_close = None
@@ -141,7 +145,7 @@ def _closest_close(
 
     if best_ts is None:
         return None
-    if abs(best_ts - target_ts) > CAGR_ANCHOR_TOLERANCE_DAYS * 86400:
+    if abs(best_ts - target_ts) > tolerance_days * 86400:
         return None
     return best_close
 
@@ -199,5 +203,67 @@ def fetch_technicals(tickers: list[str]) -> list[dict]:
                 ) * 100
 
         results.append(record)
+
+    return results
+
+
+# Diferença de dia útil real entre o pagamento (calendário) e o candle mais
+# próximo raramente passa de 1-2 dias (fim de semana/feriado) — confirmado
+# contra BBAS3 real (2026-07-15), todo pagamento bateu num candle do mesmo
+# dia. Bem mais apertado que `CAGR_ANCHOR_TOLERANCE_DAYS` (30d, usado pra
+# achar o candle "de ~N anos atrás", não pra casar uma data exata).
+DIVIDEND_PRICE_TOLERANCE_DAYS = 5
+
+
+def fetch_dividend_payments(tickers: list[str]) -> list[dict]:
+    """Busca o histórico completo de pagamentos de dividendo (10 anos) com o
+    preço de fechamento do dia do pagamento, pro gráfico da tela Stock
+    Lookup (Fase 9.3).
+
+    Retorna uma lista de dicts com `ticker`, `payment_date` (`YYYY-MM-DD`),
+    `amount` (R$/ação), `price_at_payment` (fechamento do dia, `None` se não
+    achar um candle perto o bastante — ex.: pagamento no limite dos 10 anos
+    de histórico) e `yield_pct` (`amount / price_at_payment * 100`, `None`
+    junto quando o preço também é `None`). Um ticker sem nenhum dividendo no
+    período é ignorado, mesmo padrão de `fetch_dividends_avg`.
+    """
+    results = []
+
+    for ticker in tickers:
+        try:
+            response = requests.get(
+                f"{YAHOO_CHART_URL}/{ticker}.SA",
+                params={"range": HISTORY_RANGE, "interval": "1d", "events": "div"},
+                headers={"User-Agent": "Mozilla/5.0"},
+                timeout=15,
+            )
+            response.raise_for_status()
+            chart_result = response.json()["chart"]["result"][0]
+            timestamps = chart_result["timestamp"]
+            closes = chart_result["indicators"]["quote"][0]["close"]
+        except (requests.RequestException, KeyError, TypeError, IndexError):
+            continue
+
+        dividends = chart_result.get("events", {}).get("dividends", {})
+        if not dividends:
+            continue
+
+        for entry in dividends.values():
+            payment_ts = entry["date"]
+            amount = entry["amount"]
+            price = _closest_close(
+                timestamps, closes, payment_ts, DIVIDEND_PRICE_TOLERANCE_DAYS
+            )
+            payment_date = datetime.fromtimestamp(payment_ts, tz=timezone.utc).date()
+
+            results.append(
+                {
+                    "ticker": ticker,
+                    "payment_date": payment_date.isoformat(),
+                    "amount": amount,
+                    "price_at_payment": price,
+                    "yield_pct": (amount / price * 100) if price else None,
+                }
+            )
 
     return results

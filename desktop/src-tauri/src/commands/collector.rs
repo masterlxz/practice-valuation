@@ -5,8 +5,8 @@ use serde::Serialize;
 use tokio::process::Command;
 
 use crate::entity::{
-    stock_dcf_fundamentals, stock_dividends_avg, stock_fundamentals, stock_quotes,
-    stock_technicals,
+    stock_dcf_fundamentals, stock_dividend_payments, stock_dividends_avg, stock_fundamentals,
+    stock_quotes, stock_technicals,
 };
 use crate::error::AppError;
 
@@ -128,4 +128,16 @@ pub async fn list_stock_technicals(
         .await?;
 
     Ok(technicals)
+}
+
+#[tauri::command]
+pub async fn list_stock_dividend_payments(
+    db: tauri::State<'_, DatabaseConnection>,
+) -> Result<Vec<stock_dividend_payments::Model>, AppError> {
+    let payments = stock_dividend_payments::Entity::find()
+        .order_by_asc(stock_dividend_payments::Column::PaymentDate)
+        .all(db.inner())
+        .await?;
+
+    Ok(payments)
 }

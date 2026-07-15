@@ -5,6 +5,7 @@ import type { AppError, ValuationModel } from "../types";
 import { latestForTicker } from "../collector/latestForTicker";
 import type {
   StockDcfFundamentals,
+  StockDividendPayment,
   StockDividendsAvg,
   StockFundamentals,
   StockQuote,
@@ -12,6 +13,7 @@ import type {
 } from "../collector/types";
 import Field from "../components/Field";
 import VerdictBadge from "../components/VerdictBadge";
+import DividendHistoryChart from "./DividendHistoryChart";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -33,6 +35,10 @@ type LookupData = {
   dcfFundamentals: StockDcfFundamentals | null;
   technicals: StockTechnicals | null;
   note: StockNote | null;
+  // Diferente dos outros campos (última linha só), aqui é histórico
+  // completo — o gráfico precisa de todos os pagamentos, não só o mais
+  // recente.
+  dividendPayments: StockDividendPayment[];
 };
 
 const MODEL_LABELS: Record<string, string> = {
@@ -82,7 +88,7 @@ function StockLookupPanel() {
     enabled: activeTicker !== null,
     queryFn: async () => {
       const ticker = activeTicker as string;
-      const [quotes, fundamentals, dividendsAvg, dcfFundamentals, technicals, notes] =
+      const [quotes, fundamentals, dividendsAvg, dcfFundamentals, technicals, notes, dividendPayments] =
         await Promise.all([
           invoke<StockQuote[]>("list_stock_quotes"),
           invoke<StockFundamentals[]>("list_stock_fundamentals"),
@@ -90,6 +96,7 @@ function StockLookupPanel() {
           invoke<StockDcfFundamentals[]>("list_stock_dcf_fundamentals"),
           invoke<StockTechnicals[]>("list_stock_technicals"),
           invoke<StockNote[]>("list_stock_notes"),
+          invoke<StockDividendPayment[]>("list_stock_dividend_payments"),
         ]);
 
       return {
@@ -99,6 +106,7 @@ function StockLookupPanel() {
         dcfFundamentals: latestForTicker(dcfFundamentals, ticker),
         technicals: latestForTicker(technicals, ticker),
         note: notes.find((n) => n.ticker === ticker) ?? null,
+        dividendPayments: dividendPayments.filter((p) => p.ticker === ticker),
       };
     },
   });
@@ -294,6 +302,13 @@ function StockLookupPanel() {
                 />
                 <StatTile label="Cash" value={formatRatio(data.dcfFundamentals?.cash ?? null)} />
               </div>
+            </div>
+
+            <div>
+              <h3 className="mb-3 text-sm font-semibold text-muted-foreground">
+                Dividend history
+              </h3>
+              <DividendHistoryChart payments={data.dividendPayments} />
             </div>
 
             <div>
