@@ -379,18 +379,25 @@ def fetch_payout(ticker_cvm_codes: dict[str, str]) -> list[dict]:
 
 
 def fetch_dcf_fundamentals(ticker_cvm_codes: dict[str, str]) -> list[dict]:
-    """Busca os 7 campos do DCF derivados de dados contábeis da CVM (EBIT,
-    alíquota efetiva, D&A, Capex, ΔNWC, dívida total, caixa) pra cada
-    ticker. `shares_outstanding` não vem daqui — ver nota no topo do arquivo.
+    """Busca os 8 campos do DCF/Stock Lookup derivados de dados contábeis da
+    CVM (EBIT, alíquota efetiva, D&A, Capex, ΔNWC, dívida total, caixa,
+    receita líquida) pra cada ticker. `shares_outstanding` não vem daqui —
+    ver nota no topo do arquivo.
 
     `ticker_cvm_codes` é {ticker: cvm_code} — já resolvido via
     `acoes_bolsai.fetch_fundamentals` (mesma chamada que já busca LPA/VPA/ROE,
     sem chamada extra só pra achar a empresa). Retorna uma lista de dicts
     com `ticker`, `reference_year`, `ebit`, `tax_rate`,
     `depreciation_amortization` (pode ser `None`), `capex` (pode ser
-    `None`), `nwc_change`, `total_debt`, `cash`. Um ticker sem dado
-    encontrável (ex.: banco — taxonomia de DRE diferente, ver domain/dcf.rs)
-    é ignorado, não derruba o restante.
+    `None`), `nwc_change`, `total_debt`, `cash`, `revenue`. Um ticker sem
+    dado encontrável (ex.: banco — taxonomia de DRE diferente, ver
+    domain/dcf.rs) é ignorado, não derruba o restante.
+
+    `revenue` (Sessão 20, pra margem líquida do Stock Lookup) usa a conta
+    "3.01" da DRE ("Receita de Venda de Bens e/ou Serviços" na maioria das
+    empresas, rótulo muda pra banco/seguradora mas o código é igualmente
+    estável) — confirmado contra o zip real: mesma cobertura exata da conta
+    "3.05" do EBIT (436 de 436 empresas com EBIT também têm receita).
     """
     zip_path = _resolve_zip_path()
     results = []
@@ -434,6 +441,7 @@ def fetch_dcf_fundamentals(ticker_cvm_codes: dict[str, str]) -> list[dict]:
                         + _find_exact(company_bpp, "2.02.01")
                     ),
                     "cash": _find_exact(company_bpa, "1.01.01"),
+                    "revenue": _find_exact(company_dre, "3.01"),
                 }
             )
         except (KeyError, LookupError, IndexError):

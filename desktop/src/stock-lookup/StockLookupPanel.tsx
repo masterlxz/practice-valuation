@@ -158,8 +158,42 @@ function StockLookupPanel() {
   const price = data?.quote?.price ?? null;
   const lpa = data?.fundamentals?.lpa ?? null;
   const vpa = data?.fundamentals?.vpa ?? null;
+  const roe = data?.fundamentals?.roe ?? null;
   const pl = price != null && lpa ? price / lpa : null;
   const pvp = price != null && vpa ? price / vpa : null;
+
+  // Os 3 indicadores abaixo (Fase 9.2) não têm comando próprio — são conta
+  // em cima de campos que o DCF/fundamentals já trazem, mesmo espírito do
+  // P/L e P/VP acima. `ebit`/`total_debt`/`cash`/`shares_outstanding`/
+  // `revenue` já vêm em R$ milhões da CVM, então dá pra somar/dividir direto
+  // sem converter unidade.
+  const ebit = data?.dcfFundamentals?.ebit ?? null;
+  const da = data?.dcfFundamentals?.depreciation_amortization ?? null;
+  const totalDebt = data?.dcfFundamentals?.total_debt ?? null;
+  const cash = data?.dcfFundamentals?.cash ?? null;
+  const sharesOutstanding = data?.dcfFundamentals?.shares_outstanding ?? null;
+  const revenue = data?.dcfFundamentals?.revenue ?? null;
+
+  const ebitda = ebit != null && da != null ? ebit + da : null;
+  const netDebt = totalDebt != null && cash != null ? totalDebt - cash : null;
+  const netDebtToEbitda = netDebt != null && ebitda ? netDebt / ebitda : null;
+
+  const marketCap = price != null && sharesOutstanding != null ? price * sharesOutstanding : null;
+  const enterpriseValue =
+    marketCap != null && totalDebt != null && cash != null
+      ? marketCap + totalDebt - cash
+      : null;
+  const evToEbit = enterpriseValue != null && ebit ? enterpriseValue / ebit : null;
+
+  // Lucro líquido não é buscado direto — deriva do ROE (lucro/patrimônio)
+  // vezes o patrimônio (VPA × ações em circulação), evitando uma nova
+  // extração na CVM só pra chegar num número que já dá pra calcular com o
+  // que já temos guardado.
+  const netIncome =
+    roe != null && vpa != null && sharesOutstanding != null
+      ? (roe / 100) * vpa * sharesOutstanding
+      : null;
+  const netMargin = netIncome != null && revenue ? (netIncome / revenue) * 100 : null;
 
   const savedValuations = (valuationsQuery.data ?? []).filter(
     (v) => v.ticker === activeTicker,
@@ -226,6 +260,9 @@ function StockLookupPanel() {
               <StatTile label="CAGR 10y" value={formatPercent(data.technicals?.cagr_10y)} />
               <StatTile label="P/L" value={formatRatio(pl)} />
               <StatTile label="P/VP" value={formatRatio(pvp)} />
+              <StatTile label="Net Debt/EBITDA" value={formatRatio(netDebtToEbitda)} />
+              <StatTile label="EV/EBIT" value={formatRatio(evToEbit)} />
+              <StatTile label="Net Margin" value={formatPercent(netMargin)} />
             </div>
 
             <div>

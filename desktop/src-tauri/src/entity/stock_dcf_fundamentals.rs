@@ -28,6 +28,8 @@ pub struct Model {
     pub fetched_at: String,
     #[sea_orm(column_type = "Double", nullable)]
     pub tax_rate: Option<f64>,
+    #[sea_orm(column_type = "Double", nullable)]
+    pub revenue: Option<f64>,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

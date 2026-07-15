@@ -39,6 +39,7 @@ export type StockDcfFundamentals = {
   shares_outstanding: number;
   source: string;
   fetched_at: string;
+  revenue: number | null;
 };
 
 export type StockTechnicals = {
