@@ -17,5 +17,7 @@ pub mod rnav_inputs;
 pub mod stock_dcf_fundamentals;
 pub mod stock_dividends_avg;
 pub mod stock_fundamentals;
+pub mod stock_notes;
 pub mod stock_quotes;
+pub mod stock_technicals;
 pub mod valuation;

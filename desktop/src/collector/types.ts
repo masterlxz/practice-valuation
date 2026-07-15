@@ -40,3 +40,15 @@ export type StockDcfFundamentals = {
   source: string;
   fetched_at: string;
 };
+
+export type StockTechnicals = {
+  id: number;
+  ticker: string;
+  sma_50: number | null;
+  sma_100: number | null;
+  sma_200: number | null;
+  cagr_5y: number | null;
+  cagr_10y: number | null;
+  source: string;
+  fetched_at: string;
+};

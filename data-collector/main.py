@@ -186,6 +186,38 @@ def collect_stock_dcf_fundamentals(fundamentals: list[dict]) -> list[dict]:
     return records
 
 
+def collect_stock_technicals(tickers: list[str]) -> list[dict]:
+    if not tickers:
+        return []
+
+    technicals = acoes_yahoo.fetch_technicals(tickers)
+
+    conn = sqlite3.connect(DB_PATH)
+    conn.execute("PRAGMA journal_mode=WAL")
+    now = datetime.now(timezone.utc).isoformat()
+    conn.executemany(
+        "INSERT INTO stock_technicals (ticker, sma_50, sma_100, sma_200, "
+        "cagr_5y, cagr_10y, source, fetched_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        [
+            (
+                item["ticker"],
+                item["sma_50"],
+                item["sma_100"],
+                item["sma_200"],
+                item["cagr_5y"],
+                item["cagr_10y"],
+                "yahoo_finance",
+                now,
+            )
+            for item in technicals
+        ],
+    )
+    conn.commit()
+    conn.close()
+
+    return technicals
+
+
 def _classify_signal(raw_value: float, green_boundary: float, red_boundary: float) -> str:
     """Mirrors `src-tauri/src/domain/crypto_score.rs::classify`.
 
@@ -316,6 +348,17 @@ def main(ticker: str | None = None) -> int:
             f"Cash {item['cash']:.1f} (R$ millions)"
         )
     print(f"Updated {len(dcf_fundamentals)} DCF fundamentals record(s)")
+
+    technicals = collect_stock_technicals(tickers)
+    for item in technicals:
+        sma_200 = item["sma_200"]
+        cagr_10y = item["cagr_10y"]
+        print(
+            f"{item['ticker']}: SMA200 "
+            f"{'n/a' if sma_200 is None else f'R$ {sma_200:.2f}'} / "
+            f"CAGR 10y {'n/a' if cagr_10y is None else f'{cagr_10y:.1f}%'}"
+        )
+    print(f"Updated {len(technicals)} technicals record(s)")
 
     return 0
 

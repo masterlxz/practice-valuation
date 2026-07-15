@@ -15,5 +15,7 @@ pub use super::rnav_inputs::Entity as RnavInputs;
 pub use super::stock_dcf_fundamentals::Entity as StockDcfFundamentals;
 pub use super::stock_dividends_avg::Entity as StockDividendsAvg;
 pub use super::stock_fundamentals::Entity as StockFundamentals;
+pub use super::stock_notes::Entity as StockNotes;
 pub use super::stock_quotes::Entity as StockQuotes;
+pub use super::stock_technicals::Entity as StockTechnicals;
 pub use super::valuation::Entity as Valuation;

@@ -4,7 +4,10 @@ use sea_orm::{DatabaseConnection, EntityTrait, QueryOrder};
 use serde::Serialize;
 use tokio::process::Command;
 
-use crate::entity::{stock_dcf_fundamentals, stock_dividends_avg, stock_fundamentals, stock_quotes};
+use crate::entity::{
+    stock_dcf_fundamentals, stock_dividends_avg, stock_fundamentals, stock_quotes,
+    stock_technicals,
+};
 use crate::error::AppError;
 
 // Dev-only paths — the venv and script live in the data-collector/ bind
@@ -113,4 +116,16 @@ pub async fn list_stock_dcf_fundamentals(
         .await?;
 
     Ok(fundamentals)
+}
+
+#[tauri::command]
+pub async fn list_stock_technicals(
+    db: tauri::State<'_, DatabaseConnection>,
+) -> Result<Vec<stock_technicals::Model>, AppError> {
+    let technicals = stock_technicals::Entity::find()
+        .order_by_desc(stock_technicals::Column::FetchedAt)
+        .all(db.inner())
+        .await?;
+
+    Ok(technicals)
 }

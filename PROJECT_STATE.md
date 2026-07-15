@@ -85,6 +85,8 @@ Fase 4 — Interface Desktop                        [~] Em andamento (shadcn/ui 
 Fase 5 — Monitoramento & Alertas                  [x] Completa — cadastro (5.1), verificação periódica (5.2) e notificação nativa do SO (5.3, validada na Sessão 12)
 Fase 6 — Publicação (GitHub público)               [ ] Não iniciada
 Fase 7 — Chat de IA Integrado                      [~] Em andamento (7.1 a 7.5 completas — storage seguro da chave, cliente HTTP do Gemini, contexto de leitura do banco no systemInstruction, painel de chat na UI e abstração multi-provider (`Provider` enum, `ask_ai`), todas validadas ponta a ponta incl. no app real; falta 7.6/7.7 (Claude/OpenAI de verdade) e a ideia nova 7.9 (config de múltiplas chaves nomeadas + redesenho do painel); ver Fases Detalhadas)
+Fase 8 — Sync Multi-Dispositivo via TruthID+IPFS  [ ] Brainstorm apenas — nenhuma decisão de arquitetura tomada, ver Fases Detalhadas
+Fase 9 — Tela de Pesquisa de Ação (Stock Lookup)  [~] Em andamento (9.1 completa — cotação/fundamentos/DCF/SMA/CAGR/P-L/P-VP/valuation salva/anotações, testada ponta a ponta no app real; 9.2–9.5 só registradas como pendência, ver Fases Detalhadas)
 ```
 
 ---
@@ -556,6 +558,27 @@ abaixo continua em aberto). Detalhe completo no Log de Sessões, entrada Sessão
 
 ---
 
+### Fase 9 — Tela de Pesquisa de Ação (Stock Lookup, ideia levantada na Sessão 20)
+
+**Objetivo**: tela nova e separada (aba "Stock Lookup", ao lado de "Valuation" na navegação principal) pra pesquisar um ticker de ação e ver várias informações reunidas de uma vez — cotação, fundamentos (LPA/VPA/ROE/payout), dividendo médio 5 anos, DCF fundamentals, SMA 50/100/200 dias, CAGR de preço 5/10 anos, P/L, P/VP, a valuation já salva pra esse ticker (se existir) e um espaço de anotações livres. Só ações por enquanto — cripto (que já tem seu próprio dashboard, Fase 4.3) fica pra depois.
+
+**Etapas**:
+- [x] 9.1 — Concluída na Sessão 20:
+  - `fetch_technicals` novo em `data-collector/sources/acoes_yahoo.py` (reusa o mesmo endpoint do Yahoo já usado por `fetch_quotes`/`fetch_dividends_avg`, `range=10y&interval=1d`) calcula SMA 50/100/200 dias e CAGR de preço 5/10 anos (`None` quando o ticker não tem histórico suficiente pra aquele cálculo — mesmo padrão de `payout`/`tax_rate`). Testado contra a API real (PETR4, MGLU3, WEGE3, RAIZ4, ticker inválido) antes de integrar no resto
+  - Tabelas novas `stock_technicals` (SMA/CAGR, campos nullable) e `stock_notes` (anotação livre por ticker, upsert sem constraint de unicidade — app single-user local) via migration SeaORM. **Achado real**: o mesmo bug de conversão de nome de coluna da Sessão 5/6 (`avg_dividend5y` sem underscore, corrigido por `m20260710_220000_rename_avg_dividend5y_column`) se repetiu aqui — `DeriveIden` converteu `Sma50`/`Cagr5y` pra `sma50`/`cagr5y` (sem underscore antes do dígito). Corrigido **antes** de qualquer dado real ser gravado: `Alias::new("sma_50")` etc. explícito em vez das variantes do enum, `migrate down -n 2` + edição + `migrate up` de novo
+  - `collect_stock_technicals` novo no `main.py`, chamado dentro do mesmo pipeline unificado que os formulários de valuation já usam (`run_stock_collector` continua servindo os dois — decisão consultada com o usuário: unificar a busca de histórico no Python, mas **não** disparar sempre — ver próximo item)
+  - Aba nova `StockLookupPanel.tsx` (`desktop/src/stock-lookup/`), com busca "cache-aware": a primeira pesquisa de um ticker sem nada salvo no banco dispara o collector sozinha (`useEffect` com guarda por `useRef`, evita loop infinito se o ticker realmente não existir/não tiver dado); pesquisas seguintes só leem o banco; botão "Refresh data" força atualização a qualquer momento (mesmo padrão visual do botão "Run crypto collector" do Crypto Score)
+  - P/L e P/VP calculados no frontend, não persistidos — derivados de `price`/`lpa`/`vpa` já existentes
+  - Planejada com `/plan` (dois agentes `Explore` em paralelo levantaram os padrões existentes de navegação/painéis no frontend e de migrations/entities/commands/collector no backend antes de qualquer código) e testada de ponta a ponta: `cargo check` (app principal + crate `migration`) e `npx tsc --noEmit` limpos, `python main.py --ticker PETR4` rodado contra a API real depois da migration corrigida (linha real conferida em `stock_technicals`), app rodando via `dev.sh` — **testado pelo próprio usuário no app real, aprovado** ("mt boa, mt legal")
+
+**Pendências levantadas pelo usuário na Sessão 20, pra uma sessão futura** (só registradas, nada planejado em detalhe ainda):
+- [ ] 9.2 — Mais indicadores na tela: dívida líquida/EBITDA, EV/EBIT, margem líquida
+- [ ] 9.3 — Gráfico de histórico de dividendos por mês e por ano — usuário já avisou que reconhece que é mais complexo que o resto desta fase
+- [ ] 9.4 — Ícone/logo da empresa na tela, se der pra achar uma fonte gratuita de imagens por ticker
+- [ ] 9.5 — Reorganizar a navegação: "Saved Valuations" deixa de ser aba própria na navegação principal e vira um botão dentro da aba "Valuation" (um cantinho da tela leva pra tela que já existe hoje) — pedido de UX, ainda não decidido em detalhe (onde exatamente o botão fica, se `SavedValuationsPanel` continua montado sempre ou só ao navegar pra lá)
+
+---
+
 ## Decisões de Arquitetura em Aberto
 
 | Decisão | Opções | Status |
@@ -965,6 +988,13 @@ abaixo continua em aberto). Detalhe completo no Log de Sessões, entrada Sessão
 - **2 bugs reais de Docker achados e corrigidos nesta sessão, deste lado**: `desktop/.dockerignore` não existia (build mandava ~6GB de `src-tauri/target` nativo pro daemon a cada rebuild) — criado e commitado (`ff90e5e`); volume nomeado `cargo-target` nascia com dono `root`, incompatível com o container (`user: "1000:1000"`) — corrigido com `docker compose run --rm --user root --entrypoint sh desktop -c "chown -R 1000:1000 /app/src-tauri/target"`, não precisa repetir (fica persistido no volume).
 - **Porta do Vite temporariamente em 1425** (`vite.config.ts`/`tauri.conf.json`) pra rodar ao lado do TruthID (ambos usam 1420 por padrão) — **não commitado de propósito, só mudança local**, reverter pra `1420` quando não for mais rodar junto com o TruthID.
 - **Pedido separado do usuário, mesma sessão**: verificar se a margem de segurança está sendo calculada certo. Fórmula (`(preco_justo − preco_atual) / preco_justo`, ver "Regra geral" na Fase 3 acima) é uma convenção padrão e correta — 49 testes de domínio passam, todos cobrindo `preco_justo > 0`. **Achado real**: falta guarda pra `preco_justo <= 0` em 7 dos 8 modelos (só Graham é seguro por construção) — pode inverter o veredito ou gerar `NaN`/`Infinity` silencioso. Detalhe completo registrado na Fase 3 acima. **Só investigado e registrado, não corrigido** — usuário pediu explicitamente pra só documentar por enquanto.
+
+---
+
+### 2026-07-15 — Sessão 20
+
+- **Nova aba "Stock Lookup"** (Fase 9, ideia levantada nesta sessão a partir do pedido original do usuário por uma média móvel de 200 dias): detalhe técnico completo na Fase 9 acima (SMA 50/100/200, CAGR 5/10 anos, tabelas `stock_technicals`/`stock_notes`, o bug de nome de coluna repetido e como foi corrigido, busca cache-aware no frontend). Testado de ponta a ponta pelo próprio usuário no app real (`./desktop/dev.sh`) — aprovado.
+- **Pedidos de continuação, só registrados** (ver Fase 9, 9.2–9.5): mais indicadores (dívida líquida/EBITDA, EV/EBIT, margem líquida), gráfico de histórico de dividendos por mês/ano, ícone da empresa, e mover "Saved Valuations" pra dentro da aba "Valuation" como botão em vez de aba própria.
 
 ---
 

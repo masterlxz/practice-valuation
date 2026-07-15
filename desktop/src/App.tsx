@@ -9,6 +9,7 @@ import RnavForm from "./models/RnavForm";
 import ProjectedCeilingForm from "./models/ProjectedCeilingForm";
 import CryptoScorePanel from "./crypto/CryptoScorePanel";
 import SavedValuationsPanel from "./valuations/SavedValuationsPanel";
+import StockLookupPanel from "./stock-lookup/StockLookupPanel";
 import AlertsPanel from "./alerts/AlertsPanel";
 import TruthIdPanel from "./truthid/TruthIdPanel";
 import ChatPanel from "./chat/ChatPanel";
@@ -42,6 +43,7 @@ type ModelKey = keyof typeof MODELS;
 
 const SECTIONS = {
   valuation: "Valuation",
+  lookup: "Stock Lookup",
   crypto: "Crypto Score",
   saved: "Saved Valuations",
   alerts: "Alerts",
@@ -92,6 +94,10 @@ function App() {
             </Field>
 
             <SelectedForm />
+          </TabsContent>
+
+          <TabsContent value="lookup">
+            <StockLookupPanel />
           </TabsContent>
 
           <TabsContent value="crypto">

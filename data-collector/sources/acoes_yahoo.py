@@ -21,6 +21,14 @@ média dos últimos 5 anos completos). `fetch_quotes` substituiu totalmente
 `acoes_brapi.py` (removido) — a brapi exigia token pago pra qualquer ticker
 fora da demo, o que quebrava a busca ad hoc por ticker (Fase "fetch por
 ticker" nos formulários de valuation).
+
+`fetch_technicals` (tela "Stock Lookup") reusa o mesmo endpoint com
+`range=10y&interval=1d` — confirmado direto contra a API real (2026-07-15):
+`chart.result[0].timestamp` (epoch/dia) e
+`chart.result[0].indicators.quote[0].close` (fechamento diário, `None` em
+dias sem pregão) cobrem, numa única chamada, tanto a SMA200 (só precisa dos
+últimos ~200 candles) quanto o CAGR de 10 anos (precisa do candle mais
+antigo do range).
 """
 
 from collections import defaultdict
@@ -31,9 +39,18 @@ import requests
 YAHOO_CHART_URL = "https://query1.finance.yahoo.com/v8/finance/chart"
 
 # Cobre o suficiente pra sempre sobrar 5 anos completos depois de descartar
-# o ano corrente (parcial).
+# o ano corrente (parcial), e também o range usado pelo `fetch_technicals`
+# pro CAGR de 10 anos.
 HISTORY_RANGE = "10y"
 DIVIDENDS_YEARS_AVERAGED = 5
+
+SMA_WINDOWS = (50, 100, 200)
+CAGR_YEARS = (5, 10)
+SECONDS_PER_YEAR = 365.25 * 86400
+# Se o candle mais próximo da data-alvo (hoje - N anos) estiver mais longe
+# que isso, o ticker não tem histórico suficiente pra esse CAGR (ex: IPO
+# recente) — melhor `None` do que um CAGR calculado sobre um período errado.
+CAGR_ANCHOR_TOLERANCE_DAYS = 30
 
 
 def fetch_quotes(tickers: list[str]) -> list[dict]:
@@ -103,5 +120,84 @@ def fetch_dividends_avg(tickers: list[str]) -> list[dict]:
 
         avg = sum(yearly_totals[year] for year in complete_years) / len(complete_years)
         results.append({"ticker": ticker, "avg_dividend_5y": avg})
+
+    return results
+
+
+def _closest_close(
+    timestamps: list[int], closes: list[float | None], target_ts: float
+) -> float | None:
+    """Fecho mais próximo de `target_ts`, ignorando candles sem pregão
+    (`close=None`). Retorna `None` se o mais próximo estiver fora de
+    `CAGR_ANCHOR_TOLERANCE_DAYS` (histórico insuficiente pra esse período).
+    """
+    best_ts = None
+    best_close = None
+    for ts, close in zip(timestamps, closes):
+        if close is None:
+            continue
+        if best_ts is None or abs(ts - target_ts) < abs(best_ts - target_ts):
+            best_ts, best_close = ts, close
+
+    if best_ts is None:
+        return None
+    if abs(best_ts - target_ts) > CAGR_ANCHOR_TOLERANCE_DAYS * 86400:
+        return None
+    return best_close
+
+
+def fetch_technicals(tickers: list[str]) -> list[dict]:
+    """Busca médias móveis (50/100/200 dias) e CAGR (5/10 anos) de preço.
+
+    Retorna uma lista de dicts com `ticker`, `sma_50`, `sma_100`, `sma_200`,
+    `cagr_5y`, `cagr_10y` (`float` em % ou `None` quando não há histórico
+    suficiente pra aquele cálculo — ex: IPO recente sem 200 pregões ou sem
+    5/10 anos completos). Tickers que falharem na API são ignorados, mesmo
+    padrão de `fetch_quotes`/`fetch_dividends_avg`.
+    """
+    results = []
+
+    for ticker in tickers:
+        try:
+            response = requests.get(
+                f"{YAHOO_CHART_URL}/{ticker}.SA",
+                params={"range": HISTORY_RANGE, "interval": "1d"},
+                headers={"User-Agent": "Mozilla/5.0"},
+                timeout=15,
+            )
+            response.raise_for_status()
+            chart_result = response.json()["chart"]["result"][0]
+            timestamps = chart_result["timestamp"]
+            closes = chart_result["indicators"]["quote"][0]["close"]
+        except (requests.RequestException, KeyError, TypeError, IndexError):
+            continue
+
+        valid_closes = [c for c in closes if c is not None]
+        if not valid_closes:
+            continue
+
+        latest_close = valid_closes[-1]
+        latest_ts = timestamps[-1]
+
+        record = {"ticker": ticker}
+
+        for window in SMA_WINDOWS:
+            if len(valid_closes) >= window:
+                record[f"sma_{window}"] = sum(valid_closes[-window:]) / window
+            else:
+                record[f"sma_{window}"] = None
+
+        for years in CAGR_YEARS:
+            anchor_close = _closest_close(
+                timestamps, closes, latest_ts - years * SECONDS_PER_YEAR
+            )
+            if anchor_close is None or anchor_close <= 0:
+                record[f"cagr_{years}y"] = None
+            else:
+                record[f"cagr_{years}y"] = (
+                    (latest_close / anchor_close) ** (1 / years) - 1
+                ) * 100
+
+        results.append(record)
 
     return results

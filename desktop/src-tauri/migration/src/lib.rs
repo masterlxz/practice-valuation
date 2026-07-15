@@ -17,6 +17,8 @@ mod m20260711_093000_create_alert_rule_table;
 mod m20260711_171445_create_alert_event_table;
 mod m20260712_220000_add_payout_to_stock_fundamentals;
 mod m20260712_223000_create_rim_inputs;
+mod m20260715_215835_create_stock_technicals;
+mod m20260715_215836_create_stock_notes;
 
 pub struct Migrator;
 
@@ -41,6 +43,8 @@ impl MigratorTrait for Migrator {
             Box::new(m20260711_171445_create_alert_event_table::Migration),
             Box::new(m20260712_220000_add_payout_to_stock_fundamentals::Migration),
             Box::new(m20260712_223000_create_rim_inputs::Migration),
+            Box::new(m20260715_215835_create_stock_technicals::Migration),
+            Box::new(m20260715_215836_create_stock_notes::Migration),
         ]
     }
 }
