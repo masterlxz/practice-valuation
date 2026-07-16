@@ -17,6 +17,7 @@ from dotenv import load_dotenv
 from sources import (
     acoes_bolsai,
     acoes_yahoo,
+    cripto_coingecko,
     cripto_defillama,
     cripto_ultrasound,
     cvm_dfp,
@@ -330,6 +331,16 @@ def collect_crypto_net_issuance() -> dict:
     return _record_crypto_indicator("net_issuance", "ultrasound.money", raw_value)
 
 
+def collect_crypto_fees_vs_emission() -> dict:
+    raw_value = cripto_ultrasound.fetch_fees_vs_emission_ratio()
+    return _record_crypto_indicator("fees_vs_emission", "ultrasound.money", raw_value)
+
+
+def collect_crypto_nvt_ratio() -> dict:
+    raw_value = cripto_coingecko.fetch_nvt_ratio_vs_ma90()
+    return _record_crypto_indicator("nvt_ratio", "coingecko", raw_value)
+
+
 def main_crypto() -> int:
     tvl = collect_crypto_tvl_trend()
     print(f"TVL Trend (MoM): {tvl['raw_value']:.2f}% -> {tvl['signal']}")
@@ -338,6 +349,14 @@ def main_crypto() -> int:
     print(
         f"Net Issuance (annualized): {net_issuance['raw_value']:.2f}% -> {net_issuance['signal']}"
     )
+
+    fees_vs_emission = collect_crypto_fees_vs_emission()
+    print(
+        f"Fees vs Emission: {fees_vs_emission['raw_value']:.4f} -> {fees_vs_emission['signal']}"
+    )
+
+    nvt_ratio = collect_crypto_nvt_ratio()
+    print(f"NVT Ratio (vs MA90): {nvt_ratio['raw_value']:.4f} -> {nvt_ratio['signal']}")
     return 0
 
 

@@ -128,10 +128,10 @@ function CryptoScorePanel() {
     queryFn: () => invoke("list_crypto_indicators", { coin }),
   });
 
-  // Only `tvl_trend` (DefiLlama) and `net_issuance` (ultrasound.money) are
-  // automated so far, both signup-free — the other 7 indicators still go
-  // through the manual form below (paid sources or sources that need
-  // investigation, see PROJECT_STATE.md).
+  // `tvl_trend` (DefiLlama), `net_issuance` and `fees_vs_emission`
+  // (ultrasound.money), and `nvt_ratio` (CoinGecko) are automated so far,
+  // all signup-free — the other 5 indicators still go through the manual
+  // form below (paid sources, no free tier found — see PROJECT_STATE.md).
   const runCryptoCollectorMutation = useMutation<CollectorSummary, AppError, void>({
     mutationFn: () => invoke("run_crypto_collector"),
     onSuccess: () => {
@@ -204,7 +204,7 @@ function CryptoScorePanel() {
           >
             {runCryptoCollectorMutation.isPending
               ? "Running..."
-              : "Run crypto collector (TVL Trend, Net Issuance)"}
+              : "Run crypto collector (TVL Trend, Net Issuance, Fees vs Emission, NVT Ratio)"}
           </Button>
           {runCryptoCollectorMutation.isSuccess &&
             !runCryptoCollectorMutation.data.success && (
