@@ -3,6 +3,8 @@ import { invoke } from "@tauri-apps/api/core";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import type { AppError } from "../types";
 import type { GeminiContent } from "./types";
+import type { ApiKeySummary } from "../settings/SettingsPage";
+import { PROVIDER_LABELS } from "../settings/SettingsPage";
 import ApiKeyGate from "./ApiKeyGate";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -15,17 +17,15 @@ import {
 } from "@/components/ui/select";
 import { SendIcon, XIcon } from "lucide-react";
 
-// Fase 7.9.5 (Configurações completa, múltiplas chaves nomeadas) ainda não
-// existe — este seletor + campo de modelo é a versão mínima que já dá pra
-// testar Claude/OpenAI de verdade (Fase 7.6/7.7) sem esperar aquela tela.
-// Modelo padrão de cada provider: tier barato/rápido, mesmo espírito de
-// "gemini-3.1-flash-lite" — isso aqui é um widget de pergunta rápida sobre
-// dado já salvo, não um agente de código.
-const PROVIDERS = [
-  { id: "gemini", label: "Gemini", defaultModel: "gemini-3.1-flash-lite" },
-  { id: "claude", label: "Claude", defaultModel: "claude-haiku-4-5" },
-  { id: "openai", label: "OpenAI", defaultModel: "gpt-5-mini" },
-] as const;
+// Tier barato/rápido por provider, mesmo espírito de "gemini-3.1-flash-lite"
+// — isso aqui é um widget de pergunta rápida sobre dado já salvo, não um
+// agente de código. Usado só pra sugerir um modelo quando a chave escolhida
+// troca de provider; o campo de modelo continua livre pra editar.
+const DEFAULT_MODEL_BY_PROVIDER: Record<string, string> = {
+  gemini: "gemini-3.1-flash-lite",
+  claude: "claude-haiku-4-5",
+  openai: "gpt-5-mini",
+};
 
 function MessageBubble({ message }: { message: GeminiContent }) {
   const isUser = message.role === "user";
@@ -56,25 +56,44 @@ function ChatPanel({
   onHistoryChange: (history: GeminiContent[]) => void;
 }) {
   const [input, setInput] = useState("");
-  const [provider, setProvider] = useState<string>(PROVIDERS[0].id);
-  const [model, setModel] = useState<string>(PROVIDERS[0].defaultModel);
+  const [selectedKeyId, setSelectedKeyId] = useState<number | null>(null);
+  const [model, setModel] = useState("");
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  const keyStatusQuery = useQuery<boolean, AppError>({
-    queryKey: ["api-key-status", provider],
-    queryFn: () => invoke("get_api_key_status", { provider }),
+  const keysQuery = useQuery<ApiKeySummary[], AppError>({
+    queryKey: ["api-keys"],
+    queryFn: () => invoke("list_api_keys"),
     enabled: open,
   });
 
+  const keys = keysQuery.data ?? [];
+
+  // Auto-select the first available key once the list loads (or after the
+  // selected one gets deleted in Settings while the panel is open) — the
+  // model field follows along, defaulted from that key's provider.
+  useEffect(() => {
+    if (keys.length === 0) {
+      setSelectedKeyId(null);
+      return;
+    }
+    if (!keys.some((k) => k.id === selectedKeyId)) {
+      const first = keys[0];
+      setSelectedKeyId(first.id);
+      setModel(DEFAULT_MODEL_BY_PROVIDER[first.provider] ?? "");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [keys]);
+
   const sendMutation = useMutation<string, AppError, GeminiContent[]>({
-    mutationFn: (nextHistory) => invoke("ask_ai", { provider, model, history: nextHistory }),
+    mutationFn: (nextHistory) =>
+      invoke("ask_ai", { keyId: selectedKeyId, model, history: nextHistory }),
   });
 
-  function handleProviderChange(nextProvider: string) {
-    setProvider(nextProvider);
-    setModel(
-      PROVIDERS.find((p) => p.id === nextProvider)?.defaultModel ?? "",
-    );
+  function handleKeyChange(nextKeyId: string) {
+    const id = Number(nextKeyId);
+    setSelectedKeyId(id);
+    const key = keys.find((k) => k.id === id);
+    if (key) setModel(DEFAULT_MODEL_BY_PROVIDER[key.provider] ?? "");
   }
 
   useEffect(() => {
@@ -94,7 +113,7 @@ function ChatPanel({
 
   function handleSend() {
     const text = input.trim();
-    if (!text || sendMutation.isPending) return;
+    if (!text || selectedKeyId === null || sendMutation.isPending) return;
 
     const nextHistory: GeminiContent[] = [
       ...history,
@@ -117,7 +136,7 @@ function ChatPanel({
     }
   }
 
-  const hasKey = keyStatusQuery.data === true;
+  const hasKey = keys.length > 0;
 
   if (!open) return null;
 
@@ -142,29 +161,34 @@ function ChatPanel({
         </Button>
       </div>
 
-      <div className="flex gap-2 border-b p-3">
-        <Select value={provider} onValueChange={handleProviderChange}>
-          <SelectTrigger className="w-28 shrink-0">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {PROVIDERS.map((p) => (
-              <SelectItem key={p.id} value={p.id}>
-                {p.label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <Input
-          value={model}
-          onChange={(e) => setModel(e.currentTarget.value)}
-          placeholder="modelo"
-          className="text-xs"
-        />
-      </div>
+      {hasKey && (
+        <div className="flex gap-2 border-b p-3">
+          <Select
+            value={selectedKeyId !== null ? String(selectedKeyId) : undefined}
+            onValueChange={handleKeyChange}
+          >
+            <SelectTrigger className="w-36 shrink-0">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {keys.map((k) => (
+                <SelectItem key={k.id} value={String(k.id)}>
+                  {k.name} ({PROVIDER_LABELS[k.provider] ?? k.provider})
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Input
+            value={model}
+            onChange={(e) => setModel(e.currentTarget.value)}
+            placeholder="modelo"
+            className="text-xs"
+          />
+        </div>
+      )}
 
-      {keyStatusQuery.isPending ? null : !hasKey ? (
-        <ApiKeyGate provider={provider} />
+      {keysQuery.isPending ? null : !hasKey ? (
+        <ApiKeyGate />
       ) : (
         <>
           <div

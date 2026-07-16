@@ -15,8 +15,10 @@ import TruthIdPanel from "./truthid/TruthIdPanel";
 import ChatPanel from "./chat/ChatPanel";
 import ChatToggleButton from "./chat/ChatToggleButton";
 import type { GeminiContent } from "./chat/types";
+import SettingsPage from "./settings/SettingsPage";
 import Field from "./components/Field";
 import { Button } from "@/components/ui/button";
+import { SettingsIcon } from "lucide-react";
 import {
   Select,
   SelectContent,
@@ -54,13 +56,28 @@ type ValuationView = "form" | "saved";
 
 type SectionKey = keyof typeof SECTIONS;
 
+// Sem lib de rotas — app desktop de janela única não tem barra de endereço
+// pra uma URL de verdade ganhar alguma coisa. Esse estado troca a tela
+// inteira (Tabs vs Configurações), mesmo padrão já usado dentro da aba
+// Valuation pro toggle form/saved, só que no nível do App inteiro.
+type AppView = "main" | "settings";
+
 function App() {
+  const [view, setView] = useState<AppView>("main");
   const [section, setSection] = useState<SectionKey>("valuation");
   const [valuationView, setValuationView] = useState<ValuationView>("form");
   const [selectedModel, setSelectedModel] = useState<ModelKey>("bazin");
   const SelectedForm = MODELS[selectedModel].component;
   const [chatOpen, setChatOpen] = useState(false);
   const [chatHistory, setChatHistory] = useState<GeminiContent[]>([]);
+
+  if (view === "settings") {
+    return (
+      <main className="mx-auto max-w-6xl p-8">
+        <SettingsPage onBack={() => setView("main")} />
+      </main>
+    );
+  }
 
   return (
     <>
@@ -69,13 +86,24 @@ function App() {
           value={section}
           onValueChange={(value) => setSection(value as SectionKey)}
         >
-          <TabsList className="mb-6">
-            {Object.entries(SECTIONS).map(([key, label]) => (
-              <TabsTrigger key={key} value={key}>
-                {label}
-              </TabsTrigger>
-            ))}
-          </TabsList>
+          <div className="mb-6 flex items-center justify-between">
+            <TabsList>
+              {Object.entries(SECTIONS).map(([key, label]) => (
+                <TabsTrigger key={key} value={key}>
+                  {label}
+                </TabsTrigger>
+              ))}
+            </TabsList>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-sm"
+              onClick={() => setView("settings")}
+            >
+              <SettingsIcon />
+              <span className="sr-only">Configurações</span>
+            </Button>
+          </div>
 
           <TabsContent value="valuation" className="flex flex-col gap-6">
             {valuationView === "form" ? (

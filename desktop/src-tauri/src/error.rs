@@ -22,7 +22,7 @@ pub enum AppError {
     UnknownProvider(String),
     #[error("keyring error: {0}")]
     Keyring(#[from] keyring::Error),
-    #[error("no API key configured for provider '{0}'")]
+    #[error("no API key found in the keyring for key id {0} (was it deleted outside the app?)")]
     MissingApiKey(String),
     #[error("HTTP request failed: {0}")]
     Http(#[from] reqwest::Error),

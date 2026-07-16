@@ -1,7 +1,7 @@
 use sea_orm::{DatabaseConnection, EntityTrait, QueryOrder, QuerySelect};
 use serde::{Deserialize, Serialize};
 
-use crate::commands::api_key::KEYRING_SERVICE;
+use crate::commands::api_key::read_api_key_secret;
 use crate::domain::chat_provider::Provider;
 use crate::entity::{alert_event, valuation};
 use crate::error::AppError;
@@ -127,17 +127,6 @@ struct GeminiResponseBody {
 #[derive(Deserialize)]
 struct GeminiCandidate {
     content: GeminiContent,
-}
-
-// Reusable by any provider (Claude/OpenAI in Fase 7.6/7.7 call this the same
-// way) — keyring lookup itself doesn't depend on which provider it's for.
-fn read_api_key(provider: Provider) -> Result<String, AppError> {
-    let entry = keyring::Entry::new(KEYRING_SERVICE, provider.as_str())?;
-    match entry.get_password() {
-        Ok(key) => Ok(key),
-        Err(keyring::Error::NoEntry) => Err(AppError::MissingApiKey(provider.as_str().to_string())),
-        Err(err) => Err(err.into()),
-    }
 }
 
 async fn ask_gemini_api(
@@ -337,29 +326,23 @@ async fn ask_openai_api(
         .ok_or_else(|| AppError::OpenAiApi("empty response from OpenAI".to_string()))
 }
 
-// Provider-generic entry point for the chat panel.
+// Provider-generic entry point for the chat panel. `key_id` (Fase 7.9.2/7.9.3
+// — one of possibly several named keys per provider) replaces the old plain
+// `provider` string; the provider itself is now derived from the chosen key's
+// row instead of being picked by the frontend directly.
 #[tauri::command]
 pub async fn ask_ai(
-    provider: String,
+    key_id: i32,
     model: String,
     db: tauri::State<'_, DatabaseConnection>,
     history: Vec<GeminiContent>,
 ) -> Result<String, AppError> {
-    let provider = Provider::parse(&provider)?;
+    let (provider, api_key) = read_api_key_secret(db.inner(), key_id).await?;
     let system_instruction = build_system_instruction(db.inner()).await?;
     match provider {
-        Provider::Gemini => {
-            let api_key = read_api_key(Provider::Gemini)?;
-            ask_gemini_api(&api_key, &model, system_instruction, history).await
-        }
-        Provider::Claude => {
-            let api_key = read_api_key(Provider::Claude)?;
-            ask_claude_api(&api_key, &model, system_instruction, history).await
-        }
-        Provider::OpenAi => {
-            let api_key = read_api_key(Provider::OpenAi)?;
-            ask_openai_api(&api_key, &model, system_instruction, history).await
-        }
+        Provider::Gemini => ask_gemini_api(&api_key, &model, system_instruction, history).await,
+        Provider::Claude => ask_claude_api(&api_key, &model, system_instruction, history).await,
+        Provider::OpenAi => ask_openai_api(&api_key, &model, system_instruction, history).await,
     }
 }
 

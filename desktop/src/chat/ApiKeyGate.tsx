@@ -2,15 +2,17 @@ import { useState, type FormEvent } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import type { AppError } from "../types";
+import { PROVIDER_LABELS } from "../settings/SettingsPage";
 import Field from "../components/Field";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-
-const PROVIDER_LABELS: Record<string, string> = {
-  gemini: "Gemini",
-  claude: "Claude",
-  openai: "OpenAI",
-};
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 const KEY_PLACEHOLDERS: Record<string, string> = {
   gemini: "AIza...",
@@ -18,32 +20,53 @@ const KEY_PLACEHOLDERS: Record<string, string> = {
   openai: "sk-...",
 };
 
-function ApiKeyGate({ provider }: { provider: string }) {
+// Fase 7.9.2: this is now just a quick way to create the *first* named key
+// (called "Default") without a trip to Settings — provider choice moved
+// here since the chat no longer has a fixed provider, only a chosen key.
+function ApiKeyGate() {
+  const [provider, setProvider] = useState("gemini");
   const [key, setKey] = useState("");
   const queryClient = useQueryClient();
-  const providerLabel = PROVIDER_LABELS[provider] ?? provider;
 
-  const storeKeyMutation = useMutation<void, AppError, string>({
-    mutationFn: (key) => invoke("store_api_key", { provider, key }),
+  const createMutation = useMutation<number, AppError, void>({
+    mutationFn: () =>
+      invoke("create_api_key", { provider, name: "Default", key: key.trim() }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["api-key-status", provider] });
+      queryClient.invalidateQueries({ queryKey: ["api-keys"] });
       setKey("");
     },
   });
 
   function handleSubmit(event: FormEvent) {
     event.preventDefault();
-    storeKeyMutation.mutate(key.trim());
+    if (!key.trim() || createMutation.isPending) return;
+    createMutation.mutate();
   }
 
   return (
     <form onSubmit={handleSubmit} className="flex flex-col gap-4 p-4">
       <p className="text-sm text-muted-foreground">
-        Cole sua chave de API do {providerLabel} pra habilitar o chat. Ela fica
-        guardada só no keyring do seu sistema, nunca no banco ou no git.
+        Cole uma chave de API pra habilitar o chat. Ela fica guardada só no
+        keyring do seu sistema, nunca no banco ou no git — dá pra adicionar
+        mais chaves e nomeá-las depois em Configurações.
       </p>
 
-      <Field label={`Chave de API do ${providerLabel}`}>
+      <Field label="Provider">
+        <Select value={provider} onValueChange={setProvider}>
+          <SelectTrigger className="w-full">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {Object.entries(PROVIDER_LABELS).map(([id, label]) => (
+              <SelectItem key={id} value={id}>
+                {label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </Field>
+
+      <Field label={`Chave de API do ${PROVIDER_LABELS[provider] ?? provider}`}>
         <Input
           type="password"
           value={key}
@@ -52,16 +75,16 @@ function ApiKeyGate({ provider }: { provider: string }) {
         />
       </Field>
 
-      {storeKeyMutation.isError && (
-        <p className="text-red-600">{storeKeyMutation.error.message}</p>
+      {createMutation.isError && (
+        <p className="text-red-600">{createMutation.error.message}</p>
       )}
 
       <Button
         type="submit"
-        disabled={!key.trim() || storeKeyMutation.isPending}
+        disabled={!key.trim() || createMutation.isPending}
         className="w-fit"
       >
-        {storeKeyMutation.isPending ? "Salvando..." : "Salvar chave"}
+        {createMutation.isPending ? "Salvando..." : "Salvar chave"}
       </Button>
     </form>
   );
