@@ -1,10 +1,7 @@
 use crate::error::AppError;
 
 // The 3 AI chat providers the app is designed around (see Fase 7 in
-// PROJECT_STATE.md). Only Gemini has a real HTTP client (Fase 7.2); Claude
-// and OpenAI exist here as valid, storable provider IDs so key storage and
-// command signatures don't need to change again when Fase 7.6/7.7 wire them
-// up for real.
+// PROJECT_STATE.md). All 3 have real HTTP clients as of Fase 7.6/7.7.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Provider {
     Gemini,

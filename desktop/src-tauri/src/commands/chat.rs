@@ -6,8 +6,6 @@ use crate::domain::chat_provider::Provider;
 use crate::entity::{alert_event, valuation};
 use crate::error::AppError;
 
-const GEMINI_MODEL: &str = "gemini-3.1-flash-lite";
-
 // Hand-written, not generated from the domain modules — this is a compact
 // briefing for the model, not a spec. Full formulas/guards live in
 // PROJECT_STATE.md (Fase 3) if this ever needs updating alongside the models.
@@ -144,6 +142,7 @@ fn read_api_key(provider: Provider) -> Result<String, AppError> {
 
 async fn ask_gemini_api(
     api_key: &str,
+    model: &str,
     system_instruction_text: String,
     history: Vec<GeminiContent>,
 ) -> Result<String, AppError> {
@@ -154,7 +153,7 @@ async fn ask_gemini_api(
     };
 
     let url = format!(
-        "https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}:generateContent?key={api_key}"
+        "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={api_key}"
     );
     let body = GeminiRequestBody {
         system_instruction: &system_instruction,
@@ -180,27 +179,187 @@ async fn ask_gemini_api(
         .ok_or_else(|| AppError::GeminiApi("empty response from Gemini".to_string()))
 }
 
-// Provider-generic entry point for the chat panel. Claude/OpenAI are valid
-// `provider` values (see `Provider::parse`) but have no HTTP client wired up
-// yet — they fail fast with a typed error instead of being rejected as an
-// unknown provider, which would be misleading (they ARE known, just not
-// implemented; see Fase 7.5/7.6/7.7 in PROJECT_STATE.md).
+const CLAUDE_API_VERSION: &str = "2023-06-01";
+// Chat replies here are short answers about already-saved data, not long-form
+// generation — same reasoning as picking a "flash-lite"-tier Gemini model.
+const CLAUDE_MAX_TOKENS: u32 = 4096;
+
+// Reused by both Claude and OpenAI — both map Gemini's "model" role to
+// "assistant" and treat anything else (only ever "user" here) as "user".
+fn gemini_role_to_assistant_style(role: &str) -> &'static str {
+    if role == "model" {
+        "assistant"
+    } else {
+        "user"
+    }
+}
+
+fn join_parts(parts: &[GeminiPart]) -> String {
+    parts.iter().map(|part| part.text.as_str()).collect::<Vec<_>>().join("")
+}
+
+#[derive(Serialize)]
+struct ClaudeMessage {
+    role: &'static str,
+    content: String,
+}
+
+#[derive(Serialize)]
+struct ClaudeRequestBody<'a> {
+    model: &'a str,
+    max_tokens: u32,
+    system: &'a str,
+    messages: Vec<ClaudeMessage>,
+}
+
+#[derive(Deserialize)]
+struct ClaudeResponseBody {
+    content: Vec<ClaudeContentBlock>,
+}
+
+#[derive(Deserialize)]
+struct ClaudeContentBlock {
+    #[serde(rename = "type")]
+    block_type: String,
+    text: Option<String>,
+}
+
+async fn ask_claude_api(
+    api_key: &str,
+    model: &str,
+    system_instruction: String,
+    history: Vec<GeminiContent>,
+) -> Result<String, AppError> {
+    let messages = history
+        .iter()
+        .map(|content| ClaudeMessage {
+            role: gemini_role_to_assistant_style(&content.role),
+            content: join_parts(&content.parts),
+        })
+        .collect();
+
+    let body = ClaudeRequestBody {
+        model,
+        max_tokens: CLAUDE_MAX_TOKENS,
+        system: &system_instruction,
+        messages,
+    };
+
+    let client = reqwest::Client::new();
+    let response = client
+        .post("https://api.anthropic.com/v1/messages")
+        .header("x-api-key", api_key)
+        .header("anthropic-version", CLAUDE_API_VERSION)
+        .json(&body)
+        .send()
+        .await?;
+
+    if !response.status().is_success() {
+        let status = response.status();
+        let error_body = response.text().await.unwrap_or_default();
+        return Err(AppError::ClaudeApi(format!("{status}: {error_body}")));
+    }
+
+    let parsed: ClaudeResponseBody = response.json().await?;
+    parsed
+        .content
+        .into_iter()
+        .find(|block| block.block_type == "text")
+        .and_then(|block| block.text)
+        .ok_or_else(|| AppError::ClaudeApi("empty response from Claude".to_string()))
+}
+
+#[derive(Serialize)]
+struct OpenAiMessage {
+    role: &'static str,
+    content: String,
+}
+
+#[derive(Serialize)]
+struct OpenAiRequestBody<'a> {
+    model: &'a str,
+    messages: Vec<OpenAiMessage>,
+}
+
+#[derive(Deserialize)]
+struct OpenAiResponseBody {
+    choices: Vec<OpenAiChoice>,
+}
+
+#[derive(Deserialize)]
+struct OpenAiChoice {
+    message: OpenAiResponseMessage,
+}
+
+#[derive(Deserialize)]
+struct OpenAiResponseMessage {
+    content: String,
+}
+
+async fn ask_openai_api(
+    api_key: &str,
+    model: &str,
+    system_instruction: String,
+    history: Vec<GeminiContent>,
+) -> Result<String, AppError> {
+    // OpenAI has no separate "system" field — it's just the first message.
+    let mut messages = vec![OpenAiMessage {
+        role: "system",
+        content: system_instruction,
+    }];
+    messages.extend(history.iter().map(|content| OpenAiMessage {
+        role: gemini_role_to_assistant_style(&content.role),
+        content: join_parts(&content.parts),
+    }));
+
+    let body = OpenAiRequestBody { model, messages };
+
+    let client = reqwest::Client::new();
+    let response = client
+        .post("https://api.openai.com/v1/chat/completions")
+        .bearer_auth(api_key)
+        .json(&body)
+        .send()
+        .await?;
+
+    if !response.status().is_success() {
+        let status = response.status();
+        let error_body = response.text().await.unwrap_or_default();
+        return Err(AppError::OpenAiApi(format!("{status}: {error_body}")));
+    }
+
+    let parsed: OpenAiResponseBody = response.json().await?;
+    parsed
+        .choices
+        .into_iter()
+        .next()
+        .map(|choice| choice.message.content)
+        .ok_or_else(|| AppError::OpenAiApi("empty response from OpenAI".to_string()))
+}
+
+// Provider-generic entry point for the chat panel.
 #[tauri::command]
 pub async fn ask_ai(
     provider: String,
+    model: String,
     db: tauri::State<'_, DatabaseConnection>,
     history: Vec<GeminiContent>,
 ) -> Result<String, AppError> {
     let provider = Provider::parse(&provider)?;
+    let system_instruction = build_system_instruction(db.inner()).await?;
     match provider {
         Provider::Gemini => {
             let api_key = read_api_key(Provider::Gemini)?;
-            let system_instruction = build_system_instruction(db.inner()).await?;
-            ask_gemini_api(&api_key, system_instruction, history).await
+            ask_gemini_api(&api_key, &model, system_instruction, history).await
         }
-        Provider::Claude | Provider::OpenAi => Err(AppError::ProviderNotImplemented(
-            provider.as_str().to_string(),
-        )),
+        Provider::Claude => {
+            let api_key = read_api_key(Provider::Claude)?;
+            ask_claude_api(&api_key, &model, system_instruction, history).await
+        }
+        Provider::OpenAi => {
+            let api_key = read_api_key(Provider::OpenAi)?;
+            ask_openai_api(&api_key, &model, system_instruction, history).await
+        }
     }
 }
 

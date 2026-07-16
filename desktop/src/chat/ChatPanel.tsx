@@ -6,7 +6,26 @@ import type { GeminiContent } from "./types";
 import ApiKeyGate from "./ApiKeyGate";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { SendIcon, XIcon } from "lucide-react";
+
+// Fase 7.9.5 (Configurações completa, múltiplas chaves nomeadas) ainda não
+// existe — este seletor + campo de modelo é a versão mínima que já dá pra
+// testar Claude/OpenAI de verdade (Fase 7.6/7.7) sem esperar aquela tela.
+// Modelo padrão de cada provider: tier barato/rápido, mesmo espírito de
+// "gemini-3.1-flash-lite" — isso aqui é um widget de pergunta rápida sobre
+// dado já salvo, não um agente de código.
+const PROVIDERS = [
+  { id: "gemini", label: "Gemini", defaultModel: "gemini-3.1-flash-lite" },
+  { id: "claude", label: "Claude", defaultModel: "claude-haiku-4-5" },
+  { id: "openai", label: "OpenAI", defaultModel: "gpt-5-mini" },
+] as const;
 
 function MessageBubble({ message }: { message: GeminiContent }) {
   const isUser = message.role === "user";
@@ -37,18 +56,26 @@ function ChatPanel({
   onHistoryChange: (history: GeminiContent[]) => void;
 }) {
   const [input, setInput] = useState("");
+  const [provider, setProvider] = useState<string>(PROVIDERS[0].id);
+  const [model, setModel] = useState<string>(PROVIDERS[0].defaultModel);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const keyStatusQuery = useQuery<boolean, AppError>({
-    queryKey: ["api-key-status", "gemini"],
-    queryFn: () => invoke("get_api_key_status", { provider: "gemini" }),
+    queryKey: ["api-key-status", provider],
+    queryFn: () => invoke("get_api_key_status", { provider }),
     enabled: open,
   });
 
   const sendMutation = useMutation<string, AppError, GeminiContent[]>({
-    mutationFn: (nextHistory) =>
-      invoke("ask_ai", { provider: "gemini", history: nextHistory }),
+    mutationFn: (nextHistory) => invoke("ask_ai", { provider, model, history: nextHistory }),
   });
+
+  function handleProviderChange(nextProvider: string) {
+    setProvider(nextProvider);
+    setModel(
+      PROVIDERS.find((p) => p.id === nextProvider)?.defaultModel ?? "",
+    );
+  }
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight });
@@ -115,8 +142,29 @@ function ChatPanel({
         </Button>
       </div>
 
+      <div className="flex gap-2 border-b p-3">
+        <Select value={provider} onValueChange={handleProviderChange}>
+          <SelectTrigger className="w-28 shrink-0">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {PROVIDERS.map((p) => (
+              <SelectItem key={p.id} value={p.id}>
+                {p.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Input
+          value={model}
+          onChange={(e) => setModel(e.currentTarget.value)}
+          placeholder="modelo"
+          className="text-xs"
+        />
+      </div>
+
       {keyStatusQuery.isPending ? null : !hasKey ? (
-        <ApiKeyGate />
+        <ApiKeyGate provider={provider} />
       ) : (
         <>
           <div
