@@ -64,6 +64,23 @@ function formatRatio(value: number | null): string {
   return value == null ? "—" : value.toFixed(2);
 }
 
+// Free public icon CDN (`icons.brapi.dev`, part of the brapi.dev project,
+// CORS-enabled) keyed by ticker — no API call needed, just a predictable
+// image URL. 404s for tickers without a logo, so `onError` hides it instead
+// of showing a broken-image icon.
+function CompanyLogo({ ticker }: { ticker: string }) {
+  const [failed, setFailed] = useState(false);
+  if (failed) return null;
+  return (
+    <img
+      src={`https://icons.brapi.dev/icons/${ticker}.svg`}
+      alt=""
+      className="h-10 w-10 rounded-full"
+      onError={() => setFailed(true)}
+    />
+  );
+}
+
 // Same "label / value" tile shape as CryptoScorePanel's IndicatorTile, reused
 // here for quote/technicals/fundamentals/DCF stats instead of signals.
 function StatTile({ label, value }: { label: string; value: string }) {
@@ -259,6 +276,11 @@ function StockLookupPanel() {
 
         {activeTicker && data && data.quote !== null && (
           <>
+            <div className="flex items-center gap-3">
+              <CompanyLogo ticker={activeTicker} />
+              <h2 className="text-xl font-semibold">{activeTicker}</h2>
+            </div>
+
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
               <StatTile label="Price" value={formatCurrency(price)} />
               <StatTile label="SMA 50" value={formatCurrency(data.technicals?.sma_50)} />
