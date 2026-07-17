@@ -89,15 +89,44 @@ pub async fn test_truthid_connection() -> Result<TruthIdHandshakeResult, AppErro
     Ok(TruthIdHandshakeResult { port, desktop_version, accepted: true })
 }
 
-// `rename_all = "camelCase"` é essencial, não cosmético: tanto o
-// `SignRequestResponse` do TruthID Desktop (loopback,
-// `desktop/src-tauri/src/sign_request.rs`) quanto o resultado que o Mobile
-// entrega via LAN cross-device (`sign_request_approval_screen.dart::_deliver`)
-// mandam `userOpHash`/`transactionHash` em camelCase — sem este atributo, os
-// campos (sendo `Option<T>`) simplesmente nunca casam e ficam `None` em
-// silêncio, mesmo quando a resposta real trazia um hash.
-#[derive(Serialize, Deserialize)]
+// Formato de fio (o JSON que chega de fora: `SignRequestResponse` do TruthID
+// Desktop via loopback, `desktop/src-tauri/src/sign_request.rs`, e o
+// resultado que o Mobile entrega via LAN/dead-drop cross-device,
+// `sign_request_approval_screen.dart::_deliver`) — sempre camelCase
+// (`userOpHash`/`transactionHash`). Convertido pra `TruthIdSignResult`
+// antes de voltar pro frontend via Tauri: **achado real desta sessão** —
+// dar `rename_all = "camelCase"` direto em `TruthIdSignResult` (como uma
+// sessão anterior tinha feito) também muda a serialização de volta pro
+// Tauri/JS, mas o frontend (`TruthIdPanel.tsx`) lê `user_op_hash`/
+// `transaction_hash` em snake_case (mesmo padrão que `TruthIdHandshakeResult`
+// já usa) — os dois lados desta struct (desserializar o JSON alheio vs
+// serializar de volta pro Tauri) precisam de convenções de nome diferentes,
+// por isso são dois tipos diferentes agora. Só foi pego testando de
+// verdade com um celular físico: `cargo test`/`tsc` nunca teriam pego,
+// porque nenhum dos dois lados sozinho está "errado" — só a combinação dos
+// dois é que quebra silenciosamente (os campos são `Option<T>`, então uma
+// chave ausente nunca gera erro de parse, só vira `None`/`undefined`).
+#[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
+struct TruthIdWireResult {
+    status: String,
+    user_op_hash: Option<String>,
+    transaction_hash: Option<String>,
+    error: Option<String>,
+}
+
+impl From<TruthIdWireResult> for TruthIdSignResult {
+    fn from(wire: TruthIdWireResult) -> Self {
+        TruthIdSignResult {
+            status: wire.status,
+            user_op_hash: wire.user_op_hash,
+            transaction_hash: wire.transaction_hash,
+            error: wire.error,
+        }
+    }
+}
+
+#[derive(Serialize)]
 pub struct TruthIdSignResult {
     status: String,
     user_op_hash: Option<String>,
@@ -116,7 +145,7 @@ pub async fn send_test_sign_request() -> Result<TruthIdSignResult, AppError> {
         .timeout(Duration::from_secs(310))
         .build()?;
     let url = format!("http://127.0.0.1:{port}/truthid/v1/sign-request");
-    let result: TruthIdSignResult = client
+    let result: TruthIdWireResult = client
         .post(&url)
         .json(&serde_json::json!({
             "appName": APP_NAME,
@@ -130,7 +159,7 @@ pub async fn send_test_sign_request() -> Result<TruthIdSignResult, AppError> {
         .json()
         .await?;
 
-    Ok(result)
+    Ok(result.into())
 }
 
 /// Mesmo TTL que `qrPayload.ts::SESSION_TTL_MS` já usa pro pareamento do
@@ -232,7 +261,9 @@ fn decrypt_and_parse_result(
     ephemeral_priv_key_hex: &str,
 ) -> Result<TruthIdSignResult, AppError> {
     let plaintext = ecies::decrypt(blob, ephemeral_priv_key_hex).map_err(AppError::TruthId)?;
-    serde_json::from_slice(&plaintext).map_err(|e| AppError::TruthId(e.to_string()))
+    let wire: TruthIdWireResult =
+        serde_json::from_slice(&plaintext).map_err(|e| AppError::TruthId(e.to_string()))?;
+    Ok(wire.into())
 }
 
 /// Varre a LAN repetidamente (portas `lan_sweep::CANDIDATE_PORTS`, mesmo
