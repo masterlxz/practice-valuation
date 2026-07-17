@@ -4,8 +4,10 @@ mod alert_checker;
 mod commands;
 mod db;
 mod domain;
+mod ecies;
 mod entity;
 mod error;
+mod lan_sweep;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -51,7 +53,9 @@ pub fn run() {
             commands::stock_notes::list_stock_notes,
             commands::stock_notes::save_stock_note,
             commands::truthid::test_truthid_connection,
-            commands::truthid::send_test_sign_request
+            commands::truthid::send_test_sign_request,
+            commands::truthid::create_cross_device_sign_request,
+            commands::truthid::await_cross_device_sign_request_response
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
