@@ -3,10 +3,12 @@ use std::sync::atomic::AtomicBool;
 mod alert_checker;
 mod commands;
 mod db;
+mod dead_drop;
 mod domain;
 mod ecies;
 mod entity;
 mod error;
+mod ipns_key;
 mod lan_sweep;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]

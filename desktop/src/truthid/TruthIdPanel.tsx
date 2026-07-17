@@ -144,7 +144,7 @@ function TruthIdPanel() {
             disabled={crossDeviceSessionMutation.isPending || crossDeviceResultMutation.isPending}
           >
             {crossDeviceResultMutation.isPending
-              ? "Waiting for your phone..."
+              ? "Waiting for your phone (LAN + IPFS backup)..."
               : "Start cross-device request"}
           </Button>
           {crossDeviceSessionMutation.isError && (

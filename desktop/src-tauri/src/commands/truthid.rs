@@ -3,6 +3,7 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use rand::RngCore;
 use serde::{Deserialize, Serialize};
 
+use crate::dead_drop;
 use crate::ecies;
 use crate::error::AppError;
 use crate::lan_sweep;
@@ -219,11 +220,32 @@ pub fn create_cross_device_sign_request() -> Result<CrossDeviceSession, AppError
     })
 }
 
+/// Intervalo entre tentativas de dead-drop — bem mais espaçado que a LAN
+/// (`SWEEP_RETRY_INTERVAL`, 2s): a propagação de IPNS leva até ~1-2min, e
+/// bater num gateway público a cada 2s seria agressivo demais. Mesma ordem
+/// de grandeza do `chrome.alarms` da extensão (1/min), um pouco mais
+/// frequente porque a sessão inteira aqui dura só 3min, não indefinidamente.
+const DEAD_DROP_RETRY_INTERVAL: Duration = Duration::from_secs(20);
+
+fn decrypt_and_parse_result(
+    blob: &[u8],
+    ephemeral_priv_key_hex: &str,
+) -> Result<TruthIdSignResult, AppError> {
+    let plaintext = ecies::decrypt(blob, ephemeral_priv_key_hex).map_err(AppError::TruthId)?;
+    serde_json::from_slice(&plaintext).map_err(|e| AppError::TruthId(e.to_string()))
+}
+
 /// Varre a LAN repetidamente (portas `lan_sweep::CANDIDATE_PORTS`, mesmo
-/// bloco que `RemoteSignerLanServer` do Mobile usa) até o celular responder
-/// ou a sessão expirar. Decifra o blob ECIES com a chave efêmera privada
-/// gerada por `create_cross_device_sign_request` e decodifica o mesmo
-/// formato de `TruthIdSignResult` que o canal loopback já usa.
+/// bloco que `RemoteSignerLanServer` do Mobile usa) e, em paralelo com
+/// cadência bem mais espaçada, tenta o dead-drop IPFS/IPNS
+/// (`dead_drop::try_fetch_dead_drop`) — os dois transportes que o Mobile já
+/// tenta em paralelo ao entregar a resposta (`sign_request_approval_screen.dart`).
+/// O primeiro que achar um blob decide; nenhum dos dois é obrigatório (o
+/// Mobile publica o dead-drop best-effort, sem provider Kubo configurado ele
+/// nem tenta). Decifra o blob ECIES com a chave efêmera privada gerada por
+/// `create_cross_device_sign_request` e decodifica o mesmo formato de
+/// `TruthIdSignResult` que o canal loopback já usa — os dois transportes
+/// carregam exatamente o mesmo blob ECIES, sem envelope extra.
 #[tauri::command]
 pub async fn await_cross_device_sign_request_response(
     session_id: String,
@@ -231,14 +253,18 @@ pub async fn await_cross_device_sign_request_response(
     expires_at_ms: i64,
 ) -> Result<TruthIdSignResult, AppError> {
     let client = reqwest::Client::new();
+    let mut next_dead_drop_attempt_ms = now_ms();
 
     loop {
         if let Some(blob) = lan_sweep::sweep_once(&session_id, &client).await {
-            let plaintext =
-                ecies::decrypt(&blob, &ephemeral_priv_key_hex).map_err(AppError::TruthId)?;
-            let result: TruthIdSignResult =
-                serde_json::from_slice(&plaintext).map_err(|e| AppError::TruthId(e.to_string()))?;
-            return Ok(result);
+            return decrypt_and_parse_result(&blob, &ephemeral_priv_key_hex);
+        }
+
+        if now_ms() >= next_dead_drop_attempt_ms {
+            if let Some(blob) = dead_drop::try_fetch_dead_drop(&session_id, &client).await {
+                return decrypt_and_parse_result(&blob, &ephemeral_priv_key_hex);
+            }
+            next_dead_drop_attempt_ms = now_ms() + DEAD_DROP_RETRY_INTERVAL.as_millis() as i64;
         }
 
         if now_ms() >= expires_at_ms {
