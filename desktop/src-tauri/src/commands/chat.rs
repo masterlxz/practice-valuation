@@ -326,10 +326,30 @@ async fn ask_openai_api(
         .ok_or_else(|| AppError::OpenAiApi("empty response from OpenAI".to_string()))
 }
 
-// Provider-generic entry point for the chat panel. `key_id` (Fase 7.9.2/7.9.3
-// — one of possibly several named keys per provider) replaces the old plain
-// `provider` string; the provider itself is now derived from the chosen key's
-// row instead of being picked by the frontend directly.
+// Shared by `ask_ai` (floating widget) and `commands::conversation`'s saved
+// conversations (Fase 7.10.2) — resolves the key, builds the read-only DB
+// context, and dispatches to the right provider. Kept as a plain function
+// (not a command) so both entry points stay in sync with `SYSTEM_REPERTOIRE`
+// instead of duplicating this logic.
+pub async fn generate_reply(
+    db: &DatabaseConnection,
+    key_id: i32,
+    model: &str,
+    history: Vec<GeminiContent>,
+) -> Result<String, AppError> {
+    let (provider, api_key) = read_api_key_secret(db, key_id).await?;
+    let system_instruction = build_system_instruction(db).await?;
+    match provider {
+        Provider::Gemini => ask_gemini_api(&api_key, model, system_instruction, history).await,
+        Provider::Claude => ask_claude_api(&api_key, model, system_instruction, history).await,
+        Provider::OpenAi => ask_openai_api(&api_key, model, system_instruction, history).await,
+    }
+}
+
+// Provider-generic entry point for the floating chat widget. `key_id` (Fase
+// 7.9.2/7.9.3 — one of possibly several named keys per provider) replaces the
+// old plain `provider` string; the provider itself is now derived from the
+// chosen key's row instead of being picked by the frontend directly.
 #[tauri::command]
 pub async fn ask_ai(
     key_id: i32,
@@ -337,13 +357,7 @@ pub async fn ask_ai(
     db: tauri::State<'_, DatabaseConnection>,
     history: Vec<GeminiContent>,
 ) -> Result<String, AppError> {
-    let (provider, api_key) = read_api_key_secret(db.inner(), key_id).await?;
-    let system_instruction = build_system_instruction(db.inner()).await?;
-    match provider {
-        Provider::Gemini => ask_gemini_api(&api_key, &model, system_instruction, history).await,
-        Provider::Claude => ask_claude_api(&api_key, &model, system_instruction, history).await,
-        Provider::OpenAi => ask_openai_api(&api_key, &model, system_instruction, history).await,
-    }
+    generate_reply(db.inner(), key_id, &model, history).await
 }
 
 #[cfg(test)]

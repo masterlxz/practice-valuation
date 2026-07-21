@@ -3,6 +3,8 @@
 pub mod prelude;
 
 pub mod ai_api_key;
+pub mod ai_conversation;
+pub mod ai_message;
 pub mod alert_event;
 pub mod alert_rule;
 pub mod banks_inputs;

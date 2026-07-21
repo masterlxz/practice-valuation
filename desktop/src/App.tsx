@@ -16,9 +16,10 @@ import ChatPanel from "./chat/ChatPanel";
 import ChatToggleButton from "./chat/ChatToggleButton";
 import type { GeminiContent } from "./chat/types";
 import SettingsPage from "./settings/SettingsPage";
+import ChatScreen from "./chat-full/ChatScreen";
 import Field from "./components/Field";
 import { Button } from "@/components/ui/button";
-import { SettingsIcon } from "lucide-react";
+import { MessageSquareIcon, SettingsIcon } from "lucide-react";
 import {
   Select,
   SelectContent,
@@ -60,7 +61,7 @@ type SectionKey = keyof typeof SECTIONS;
 // pra uma URL de verdade ganhar alguma coisa. Esse estado troca a tela
 // inteira (Tabs vs Configurações), mesmo padrão já usado dentro da aba
 // Valuation pro toggle form/saved, só que no nível do App inteiro.
-type AppView = "main" | "settings";
+type AppView = "main" | "settings" | "chat";
 
 function App() {
   const [view, setView] = useState<AppView>("main");
@@ -75,6 +76,14 @@ function App() {
     return (
       <main className="mx-auto max-w-6xl p-8">
         <SettingsPage onBack={() => setView("main")} />
+      </main>
+    );
+  }
+
+  if (view === "chat") {
+    return (
+      <main className="mx-auto max-w-6xl p-8">
+        <ChatScreen onBack={() => setView("main")} />
       </main>
     );
   }
@@ -94,15 +103,26 @@ function App() {
                 </TabsTrigger>
               ))}
             </TabsList>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon-sm"
-              onClick={() => setView("settings")}
-            >
-              <SettingsIcon />
-              <span className="sr-only">Configurações</span>
-            </Button>
+            <div className="flex items-center gap-1">
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon-sm"
+                onClick={() => setView("chat")}
+              >
+                <MessageSquareIcon />
+                <span className="sr-only">Chat em tela cheia</span>
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon-sm"
+                onClick={() => setView("settings")}
+              >
+                <SettingsIcon />
+                <span className="sr-only">Configurações</span>
+              </Button>
+            </div>
           </div>
 
           <TabsContent value="valuation" className="flex flex-col gap-6">
