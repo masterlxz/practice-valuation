@@ -11,6 +11,8 @@ export type ConversationMessage = {
   role: string;
   content: string;
   created_at: string;
+  input_tokens: number | null;
+  output_tokens: number | null;
 };
 
 // Placeholder id for the user's message while `send_conversation_message` is
@@ -27,10 +29,20 @@ const DEFAULT_MODEL_BY_PROVIDER: Record<string, string> = {
 };
 
 function convertMessage(message: ConversationMessage): ThreadMessageLike {
+  const isAssistant = message.role === "model";
   return {
     id: String(message.id),
-    role: message.role === "model" ? "assistant" : "user",
+    role: isAssistant ? "assistant" : "user",
     content: message.content,
+    metadata:
+      isAssistant && message.input_tokens !== null && message.output_tokens !== null
+        ? {
+            custom: {
+              inputTokens: message.input_tokens,
+              outputTokens: message.output_tokens,
+            },
+          }
+        : undefined,
   };
 }
 
@@ -91,6 +103,10 @@ export function useConversationRuntime(conversationId: number | null) {
   });
 
   const messages = messagesQuery.data ?? [];
+  const totalTokens = messages.reduce(
+    (sum, m) => sum + (m.input_tokens ?? 0) + (m.output_tokens ?? 0),
+    0,
+  );
 
   const runtime = useExternalStoreRuntime({
     messages,
@@ -111,6 +127,8 @@ export function useConversationRuntime(conversationId: number | null) {
             role: "user",
             content: text,
             created_at: new Date().toISOString(),
+            input_tokens: null,
+            output_tokens: null,
           },
         ],
       );
@@ -138,5 +156,6 @@ export function useConversationRuntime(conversationId: number | null) {
     handleKeyChange,
     hasKey: keys.length > 0,
     error,
+    totalTokens,
   };
 }

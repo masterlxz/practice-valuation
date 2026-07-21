@@ -37,6 +37,8 @@ pub struct ConversationMessage {
     pub role: String,
     pub content: String,
     pub created_at: String,
+    pub input_tokens: Option<i32>,
+    pub output_tokens: Option<i32>,
 }
 
 impl From<ai_message::Model> for ConversationMessage {
@@ -46,6 +48,8 @@ impl From<ai_message::Model> for ConversationMessage {
             role: row.role,
             content: row.content,
             created_at: row.created_at,
+            input_tokens: row.input_tokens,
+            output_tokens: row.output_tokens,
         }
     }
 }
@@ -172,13 +176,15 @@ pub async fn send_conversation_message(
         })
         .collect();
 
-    let reply_text = generate_reply(db.inner(), key_id, &model, history).await?;
+    let (reply_text, usage) = generate_reply(db.inner(), key_id, &model, history).await?;
 
     let reply_row = ai_message::ActiveModel {
         conversation_id: Set(conversation_id),
         role: Set("model".to_string()),
         content: Set(reply_text),
         created_at: Set(chrono::Utc::now().to_rfc3339()),
+        input_tokens: Set(Some(usage.input_tokens)),
+        output_tokens: Set(Some(usage.output_tokens)),
         ..Default::default()
     }
     .insert(db.inner())

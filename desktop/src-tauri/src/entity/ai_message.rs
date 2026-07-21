@@ -12,6 +12,8 @@ pub struct Model {
     pub role: String,
     pub content: String,
     pub created_at: String,
+    pub input_tokens: Option<i32>,
+    pub output_tokens: Option<i32>,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

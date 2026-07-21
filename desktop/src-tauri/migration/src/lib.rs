@@ -23,6 +23,7 @@ mod m20260715_230504_add_revenue_to_stock_dcf_fundamentals;
 mod m20260715_232005_create_stock_dividend_payments;
 mod m20260716_005530_create_ai_api_key;
 mod m20260721_120000_create_ai_conversation_and_message;
+mod m20260721_140000_add_token_usage_to_ai_message;
 
 pub struct Migrator;
 
@@ -53,6 +54,7 @@ impl MigratorTrait for Migrator {
             Box::new(m20260715_232005_create_stock_dividend_payments::Migration),
             Box::new(m20260716_005530_create_ai_api_key::Migration),
             Box::new(m20260721_120000_create_ai_conversation_and_message::Migration),
+            Box::new(m20260721_140000_add_token_usage_to_ai_message::Migration),
         ]
     }
 }

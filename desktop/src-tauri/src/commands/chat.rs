@@ -80,6 +80,14 @@ fn format_context(valuations: &[valuation::Model], events: &[alert_event::Model]
     )
 }
 
+// Fase 7.10.3 — uso real de tokens devolvido por toda resposta bem-sucedida
+// dos 3 provedores, lido em vez de estimado. Circula só dentro do backend;
+// o frontend recebe os números já gravados na `ai_message`.
+pub struct TokenUsage {
+    pub input_tokens: i32,
+    pub output_tokens: i32,
+}
+
 async fn build_system_instruction(db: &DatabaseConnection) -> Result<String, AppError> {
     let valuations = valuation::Entity::find()
         .order_by_desc(valuation::Column::UpdatedAt)
@@ -122,6 +130,8 @@ struct GeminiSystemInstruction {
 #[derive(Deserialize)]
 struct GeminiResponseBody {
     candidates: Vec<GeminiCandidate>,
+    #[serde(rename = "usageMetadata")]
+    usage_metadata: Option<GeminiUsageMetadata>,
 }
 
 #[derive(Deserialize)]
@@ -129,12 +139,32 @@ struct GeminiCandidate {
     content: GeminiContent,
 }
 
+// `Option` on both fields (not just the wrapper) because a response cut off
+// by a safety filter can omit `candidatesTokenCount` even when
+// `usageMetadata` itself is present.
+#[derive(Deserialize)]
+struct GeminiUsageMetadata {
+    #[serde(rename = "promptTokenCount")]
+    prompt_token_count: Option<i32>,
+    #[serde(rename = "candidatesTokenCount")]
+    candidates_token_count: Option<i32>,
+}
+
+impl GeminiUsageMetadata {
+    fn into_token_usage(self) -> TokenUsage {
+        TokenUsage {
+            input_tokens: self.prompt_token_count.unwrap_or(0),
+            output_tokens: self.candidates_token_count.unwrap_or(0),
+        }
+    }
+}
+
 async fn ask_gemini_api(
     api_key: &str,
     model: &str,
     system_instruction_text: String,
     history: Vec<GeminiContent>,
-) -> Result<String, AppError> {
+) -> Result<(String, TokenUsage), AppError> {
     let system_instruction = GeminiSystemInstruction {
         parts: vec![GeminiPart {
             text: system_instruction_text,
@@ -159,13 +189,18 @@ async fn ask_gemini_api(
     }
 
     let parsed: GeminiResponseBody = response.json().await?;
-    parsed
+    let usage = parsed
+        .usage_metadata
+        .map(GeminiUsageMetadata::into_token_usage)
+        .unwrap_or(TokenUsage { input_tokens: 0, output_tokens: 0 });
+    let text = parsed
         .candidates
         .into_iter()
         .next()
         .and_then(|candidate| candidate.content.parts.into_iter().next())
         .map(|part| part.text)
-        .ok_or_else(|| AppError::GeminiApi("empty response from Gemini".to_string()))
+        .ok_or_else(|| AppError::GeminiApi("empty response from Gemini".to_string()))?;
+    Ok((text, usage))
 }
 
 const CLAUDE_API_VERSION: &str = "2023-06-01";
@@ -204,6 +239,7 @@ struct ClaudeRequestBody<'a> {
 #[derive(Deserialize)]
 struct ClaudeResponseBody {
     content: Vec<ClaudeContentBlock>,
+    usage: ClaudeUsage,
 }
 
 #[derive(Deserialize)]
@@ -213,12 +249,21 @@ struct ClaudeContentBlock {
     text: Option<String>,
 }
 
+// Both fields are always present on a real 200 response — no `Option`
+// needed (unlike Gemini's `usageMetadata`, which can drop the output count
+// on a safety-filtered response).
+#[derive(Deserialize)]
+struct ClaudeUsage {
+    input_tokens: i32,
+    output_tokens: i32,
+}
+
 async fn ask_claude_api(
     api_key: &str,
     model: &str,
     system_instruction: String,
     history: Vec<GeminiContent>,
-) -> Result<String, AppError> {
+) -> Result<(String, TokenUsage), AppError> {
     let messages = history
         .iter()
         .map(|content| ClaudeMessage {
@@ -250,12 +295,17 @@ async fn ask_claude_api(
     }
 
     let parsed: ClaudeResponseBody = response.json().await?;
-    parsed
+    let usage = TokenUsage {
+        input_tokens: parsed.usage.input_tokens,
+        output_tokens: parsed.usage.output_tokens,
+    };
+    let text = parsed
         .content
         .into_iter()
         .find(|block| block.block_type == "text")
         .and_then(|block| block.text)
-        .ok_or_else(|| AppError::ClaudeApi("empty response from Claude".to_string()))
+        .ok_or_else(|| AppError::ClaudeApi("empty response from Claude".to_string()))?;
+    Ok((text, usage))
 }
 
 #[derive(Serialize)]
@@ -273,6 +323,7 @@ struct OpenAiRequestBody<'a> {
 #[derive(Deserialize)]
 struct OpenAiResponseBody {
     choices: Vec<OpenAiChoice>,
+    usage: OpenAiUsage,
 }
 
 #[derive(Deserialize)]
@@ -285,12 +336,18 @@ struct OpenAiResponseMessage {
     content: String,
 }
 
+#[derive(Deserialize)]
+struct OpenAiUsage {
+    prompt_tokens: i32,
+    completion_tokens: i32,
+}
+
 async fn ask_openai_api(
     api_key: &str,
     model: &str,
     system_instruction: String,
     history: Vec<GeminiContent>,
-) -> Result<String, AppError> {
+) -> Result<(String, TokenUsage), AppError> {
     // OpenAI has no separate "system" field — it's just the first message.
     let mut messages = vec![OpenAiMessage {
         role: "system",
@@ -318,12 +375,17 @@ async fn ask_openai_api(
     }
 
     let parsed: OpenAiResponseBody = response.json().await?;
-    parsed
+    let usage = TokenUsage {
+        input_tokens: parsed.usage.prompt_tokens,
+        output_tokens: parsed.usage.completion_tokens,
+    };
+    let text = parsed
         .choices
         .into_iter()
         .next()
         .map(|choice| choice.message.content)
-        .ok_or_else(|| AppError::OpenAiApi("empty response from OpenAI".to_string()))
+        .ok_or_else(|| AppError::OpenAiApi("empty response from OpenAI".to_string()))?;
+    Ok((text, usage))
 }
 
 // Shared by `ask_ai` (floating widget) and `commands::conversation`'s saved
@@ -336,7 +398,7 @@ pub async fn generate_reply(
     key_id: i32,
     model: &str,
     history: Vec<GeminiContent>,
-) -> Result<String, AppError> {
+) -> Result<(String, TokenUsage), AppError> {
     let (provider, api_key) = read_api_key_secret(db, key_id).await?;
     let system_instruction = build_system_instruction(db).await?;
     match provider {
@@ -357,7 +419,8 @@ pub async fn ask_ai(
     db: tauri::State<'_, DatabaseConnection>,
     history: Vec<GeminiContent>,
 ) -> Result<String, AppError> {
-    generate_reply(db.inner(), key_id, &model, history).await
+    let (text, _usage) = generate_reply(db.inner(), key_id, &model, history).await?;
+    Ok(text)
 }
 
 #[cfg(test)]
@@ -418,5 +481,48 @@ mod tests {
         assert!(text.contains("preço justo N/D"));
         assert!(text.contains("margem de segurança N/D"));
         assert!(text.contains("veredito N/D"));
+    }
+
+    #[test]
+    fn gemini_response_parses_usage_metadata() {
+        let body = r#"{
+            "candidates": [{"content": {"role": "model", "parts": [{"text": "oi"}]}}],
+            "usageMetadata": {"promptTokenCount": 120, "candidatesTokenCount": 45, "totalTokenCount": 165}
+        }"#;
+        let parsed: GeminiResponseBody = serde_json::from_str(body).unwrap();
+        let usage = parsed.usage_metadata.unwrap().into_token_usage();
+        assert_eq!(usage.input_tokens, 120);
+        assert_eq!(usage.output_tokens, 45);
+    }
+
+    #[test]
+    fn gemini_response_missing_usage_metadata_defaults_to_zero() {
+        let body = r#"{
+            "candidates": [{"content": {"role": "model", "parts": [{"text": "oi"}]}}]
+        }"#;
+        let parsed: GeminiResponseBody = serde_json::from_str(body).unwrap();
+        assert!(parsed.usage_metadata.is_none());
+    }
+
+    #[test]
+    fn claude_response_parses_usage() {
+        let body = r#"{
+            "content": [{"type": "text", "text": "oi"}],
+            "usage": {"input_tokens": 80, "output_tokens": 30}
+        }"#;
+        let parsed: ClaudeResponseBody = serde_json::from_str(body).unwrap();
+        assert_eq!(parsed.usage.input_tokens, 80);
+        assert_eq!(parsed.usage.output_tokens, 30);
+    }
+
+    #[test]
+    fn openai_response_parses_usage() {
+        let body = r#"{
+            "choices": [{"message": {"role": "assistant", "content": "oi"}}],
+            "usage": {"prompt_tokens": 60, "completion_tokens": 20, "total_tokens": 80}
+        }"#;
+        let parsed: OpenAiResponseBody = serde_json::from_str(body).unwrap();
+        assert_eq!(parsed.usage.prompt_tokens, 60);
+        assert_eq!(parsed.usage.completion_tokens, 20);
     }
 }

@@ -40,8 +40,17 @@ function ChatScreen({ onBack }: { onBack: () => void }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [conversationsQuery.data]);
 
-  const { runtime, keys, selectedKeyId, model, setModel, handleKeyChange, hasKey, error } =
-    useConversationRuntime(selectedConversationId);
+  const {
+    runtime,
+    keys,
+    selectedKeyId,
+    model,
+    setModel,
+    handleKeyChange,
+    hasKey,
+    error,
+    totalTokens,
+  } = useConversationRuntime(selectedConversationId);
 
   return (
     <Card className="flex h-[85vh] flex-col">
@@ -54,7 +63,12 @@ function ChatScreen({ onBack }: { onBack: () => void }) {
             <CardTitle>Chat de IA</CardTitle>
           </div>
           {hasKey && (
-            <div className="flex gap-2">
+            <div className="flex items-center gap-2">
+              {totalTokens > 0 && (
+                <span className="text-muted-foreground text-xs whitespace-nowrap">
+                  {totalTokens.toLocaleString("pt-BR")} tokens
+                </span>
+              )}
               <Select
                 value={selectedKeyId !== null ? String(selectedKeyId) : undefined}
                 onValueChange={handleKeyChange}

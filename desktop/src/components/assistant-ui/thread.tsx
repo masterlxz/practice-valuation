@@ -37,6 +37,7 @@ import {
   ThreadPrimitive,
   type ToolCallMessagePartComponent,
   useAuiState,
+  useMessage,
 } from "@assistant-ui/react";
 import {
   ArrowDownIcon,
@@ -329,6 +330,30 @@ const MessageError: FC = () => {
   );
 };
 
+// Fase 7.10.3 — custo em tokens da resposta, lido do `metadata.custom` que
+// `useConversationRuntime.ts::convertMessage` anexa (só presente em
+// mensagens de IA, nunca no usuário).
+const MessageTokenUsage: FC = () => {
+  const usage = useMessage(
+    (m) =>
+      m.metadata?.custom as
+        | { inputTokens?: number; outputTokens?: number }
+        | undefined,
+  );
+  if (usage?.inputTokens === undefined || usage?.outputTokens === undefined) {
+    return null;
+  }
+  const total = usage.inputTokens + usage.outputTokens;
+  return (
+    <span
+      data-slot="aui_assistant-message-token-usage"
+      className="text-muted-foreground ms-2 text-xs"
+    >
+      {total.toLocaleString("pt-BR")} tokens ({usage.inputTokens} in / {usage.outputTokens} out)
+    </span>
+  );
+};
+
 const AssistantMessage: FC = () => {
   const {
     ToolFallback: ToolFallbackComponent = ToolFallback,
@@ -422,6 +447,7 @@ const AssistantMessage: FC = () => {
       >
         <BranchPicker />
         <AssistantActionBar />
+        <MessageTokenUsage />
       </div>
     </MessagePrimitive.Root>
   );
