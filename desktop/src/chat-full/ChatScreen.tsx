@@ -8,6 +8,7 @@ import { PROVIDER_LABELS } from "../settings/SettingsPage";
 import ConversationSidebar, { type ConversationSummary } from "./ConversationSidebar";
 import { useConversationRuntime } from "./useConversationRuntime";
 import { Thread } from "@/components/assistant-ui/thread";
+import ValuationProposalCard from "./ValuationProposalCard";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -110,7 +111,7 @@ function ChatScreen({ onBack }: { onBack: () => void }) {
             <>
               {error && <p className="text-red-600">{error}</p>}
               <AssistantRuntimeProvider runtime={runtime}>
-                <Thread />
+                <Thread components={{ ToolFallback: ValuationProposalCard }} />
               </AssistantRuntimeProvider>
             </>
           )}

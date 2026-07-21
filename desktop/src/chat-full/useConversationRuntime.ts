@@ -6,6 +6,18 @@ import type { AppendMessage, ThreadMessageLike } from "@assistant-ui/react";
 import type { AppError } from "../types";
 import type { ApiKeySummary } from "../settings/SettingsPage";
 
+// Fase 7.10.4 — a pending/resolved AI-proposed valuation creation, joined
+// onto its `ai_message` by the backend. `payload`/`preview` already arrive
+// parsed (no `JSON.parse` needed here).
+export type ValuationProposalSummary = {
+  id: number;
+  model: string;
+  payload: { ticker: string; reference_year: number; current_price: number; inputs: Record<string, number> };
+  preview: { fair_price: number; safety_margin: number; verdict: string };
+  status: "pending" | "approved" | "rejected";
+  created_valuation_id: number | null;
+};
+
 export type ConversationMessage = {
   id: number;
   role: string;
@@ -13,6 +25,18 @@ export type ConversationMessage = {
   created_at: string;
   input_tokens: number | null;
   output_tokens: number | null;
+  proposal: ValuationProposalSummary | null;
+};
+
+// The shape handed to `ValuationProposalCard` as `args` — payload fields
+// flattened alongside `model`/`preview` so the card never needs a second
+// lookup to render either the pending or resolved state.
+export type ProposeValuationArgs = {
+  ticker: string;
+  reference_year: number;
+  current_price: number;
+  model: string;
+  preview: ValuationProposalSummary["preview"];
 };
 
 // Placeholder id for the user's message while `send_conversation_message` is
@@ -30,10 +54,39 @@ const DEFAULT_MODEL_BY_PROVIDER: Record<string, string> = {
 
 function convertMessage(message: ConversationMessage): ThreadMessageLike {
   const isAssistant = message.role === "model";
+  const proposal = message.proposal;
+
+  const content: ThreadMessageLike["content"] = proposal
+    ? [
+        {
+          type: "tool-call",
+          toolCallId: String(proposal.id),
+          toolName: "propose_valuation",
+          args: {
+            ticker: proposal.payload.ticker,
+            reference_year: proposal.payload.reference_year,
+            current_price: proposal.payload.current_price,
+            model: proposal.model,
+            preview: proposal.preview,
+          } satisfies ProposeValuationArgs,
+          // Set on BOTH resolved outcomes, not just approved — `result`
+          // (not just `approval.approved`) is what the runtime's
+          // `isPendingToolCall` check looks at, so leaving it `undefined`
+          // after a rejection would keep the message status stuck at
+          // "requires-action" forever.
+          result: proposal.status !== "pending" ? proposal : undefined,
+          approval: {
+            id: String(proposal.id),
+            ...(proposal.status !== "pending" ? { approved: proposal.status === "approved" } : {}),
+          },
+        },
+      ]
+    : message.content;
+
   return {
     id: String(message.id),
     role: isAssistant ? "assistant" : "user",
-    content: message.content,
+    content,
     metadata:
       isAssistant && message.input_tokens !== null && message.output_tokens !== null
         ? {
@@ -129,6 +182,7 @@ export function useConversationRuntime(conversationId: number | null) {
             created_at: new Date().toISOString(),
             input_tokens: null,
             output_tokens: null,
+            proposal: null,
           },
         ],
       );
@@ -143,6 +197,19 @@ export function useConversationRuntime(conversationId: number | null) {
         // optimistic placeholder is replaced by the real row(s).
         queryClient.invalidateQueries({ queryKey: ["conversation-messages", conversationId] });
         queryClient.invalidateQueries({ queryKey: ["conversations"] });
+      }
+    },
+    onRespondToToolApproval: async ({ approvalId, approved }) => {
+      if (conversationId === null) return;
+      try {
+        await invoke("respond_to_valuation_proposal", {
+          proposalId: Number(approvalId),
+          approved,
+        });
+      } finally {
+        queryClient.invalidateQueries({ queryKey: ["conversation-messages", conversationId] });
+        queryClient.invalidateQueries({ queryKey: ["conversations"] });
+        queryClient.invalidateQueries({ queryKey: ["valuations"] });
       }
     },
   });

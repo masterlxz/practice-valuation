@@ -26,11 +26,19 @@ pub enum Relation {
         on_delete = "Cascade"
     )]
     AiConversation,
+    #[sea_orm(has_many = "super::ai_valuation_proposal::Entity")]
+    AiValuationProposal,
 }
 
 impl Related<super::ai_conversation::Entity> for Entity {
     fn to() -> RelationDef {
         Relation::AiConversation.def()
+    }
+}
+
+impl Related<super::ai_valuation_proposal::Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::AiValuationProposal.def()
     }
 }
 

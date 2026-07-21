@@ -1,3 +1,4 @@
+pub mod ai_proposal;
 pub mod alert_rule;
 pub mod api_key;
 pub mod banks;

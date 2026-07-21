@@ -26,6 +26,16 @@ Os 8 modelos de valuation de ação disponíveis (campo `model` na valuation sal
 
 Score de cripto (Ethereum, score contínuo, atualizado ao longo do tempo, não anual como as ações): 9 indicadores on-chain/mercado (MVRV Z-Score, NVT Ratio, Puell Multiple, Emissão Líquida, Staking Yield Líquido, TVL DeFi, Endereços Ativos/Transações, Exchange Netflow, Fees de Rede vs Emissão), cada um classificado GREEN/NEUTRAL/RED contra dois limiares configuráveis. Score final = quantos indicadores estão GREEN de 9. Leitura sugerida: 7-9 verdes = tese intacta (manter/aportar); 4-6 = neutro (observar de perto); 0-3 = considerar reduzir risco/posição.
 
+Se o usuário pedir pra você propor a criação de uma valuation, use a tool `propose_valuation`. Nunca crie nada sozinho — a tool só monta uma prévia, o usuário precisa aprovar manualmente na interface antes de qualquer escrita no banco. O campo `inputs` deve ter exatamente estas chaves, dependendo do `model` escolhido:
+- dcf: ebit, tax_rate, depreciation_amortization, capex, nwc_change, total_debt, cash, shares_outstanding, beta, risk_free_rate, market_risk_premium, kd, perpetuity_growth (todos number)
+- gordon: current_dividend, expected_growth, ke (todos number)
+- bazin: average_dividend, desired_yield (todos number)
+- graham: eps, book_value_per_share (todos number)
+- banks: book_value_per_share, roe, payout, ke (todos number)
+- rnav: landbank, inventory_at_market_value, net_cash, shares_outstanding (todos number)
+- projected_ceiling: current_dividend, expected_growth, projection_years (inteiro), desired_yield, ke (os demais number)
+- rim: book_value_per_share, roe_current, payout, ke (todos number), fade_years (inteiro)
+
 Responda de forma direta e concisa, sempre baseado nos dados reais fornecidos abaixo. Se a pergunta não puder ser respondida com os dados disponíveis, diga isso claramente em vez de inventar números.\
 ";
 
@@ -88,6 +98,70 @@ pub struct TokenUsage {
     pub output_tokens: i32,
 }
 
+// Fase 7.10.4 — the single tool this app declares to a provider, when
+// tool-calling is enabled at all (`generate_reply`'s `tools_enabled`). Only
+// one tool exists so a plain `bool` flag is more honest than a `Vec` of
+// tool definitions that would only ever hold zero or one entry.
+const PROPOSE_VALUATION_TOOL_NAME: &str = "propose_valuation";
+const PROPOSE_VALUATION_TOOL_DESCRIPTION: &str = "\
+Propõe a criação de uma nova valuation salva. NÃO cria nada no banco — só \
+monta uma prévia que o usuário precisa aprovar manualmente na interface. Use \
+isso quando o usuário pedir explicitamente pra calcular/salvar/criar uma \
+valuation com dados que ele forneceu (ou que já estão nos dados anexados). \
+Os campos exatos esperados em `inputs` dependem do `model` escolhido — \
+consulte a lista de modelos e seus inputs no texto de instruções do sistema.";
+
+fn propose_valuation_tool_parameters() -> serde_json::Value {
+    serde_json::json!({
+        "type": "object",
+        "properties": {
+            "model": {
+                "type": "string",
+                "enum": ["dcf", "gordon", "bazin", "graham", "banks", "rnav", "projected_ceiling", "rim"]
+            },
+            "ticker": { "type": "string" },
+            "reference_year": { "type": "integer" },
+            "current_price": { "type": "number" },
+            "inputs": {
+                "type": "object",
+                "description": "Campos específicos do modelo escolhido — ver instruções do sistema."
+            }
+        },
+        "required": ["model", "ticker", "reference_year", "current_price", "inputs"]
+    })
+}
+
+// What the model actually produced this turn. This app never round-trips a
+// tool result back to the model (deliberate simplicity choice — see
+// PROJECT_STATE.md Fase 7.10.4), so there's no "pending tool call" state to
+// track here, just which of these two things happened.
+#[derive(Debug)]
+pub enum AiOutcome {
+    Text(String),
+    ToolCall {
+        model: String,
+        ticker: String,
+        reference_year: i32,
+        current_price: f64,
+        inputs: serde_json::Value,
+    },
+}
+
+// Shared by all 3 providers' response parsing: given the raw `args`/`input`
+// object a provider handed back for a `propose_valuation` call, pull out
+// the typed fields `AiOutcome::ToolCall` needs. A malformed/missing field
+// surfaces as a normal `AppError`, same as any other bad input this app
+// sees — not a panic.
+fn parse_propose_valuation_args(args: serde_json::Value) -> Result<AiOutcome, AppError> {
+    let invalid = || AppError::InvalidInput("propose_valuation call missing required fields".to_string());
+    let model = args.get("model").and_then(|v| v.as_str()).ok_or_else(invalid)?.to_string();
+    let ticker = args.get("ticker").and_then(|v| v.as_str()).ok_or_else(invalid)?.to_string();
+    let reference_year = args.get("reference_year").and_then(|v| v.as_i64()).ok_or_else(invalid)? as i32;
+    let current_price = args.get("current_price").and_then(|v| v.as_f64()).ok_or_else(invalid)?;
+    let inputs = args.get("inputs").cloned().ok_or_else(invalid)?;
+    Ok(AiOutcome::ToolCall { model, ticker, reference_year, current_price, inputs })
+}
+
 async fn build_system_instruction(db: &DatabaseConnection) -> Result<String, AppError> {
     let valuations = valuation::Entity::find()
         .order_by_desc(valuation::Column::UpdatedAt)
@@ -111,15 +185,44 @@ pub struct GeminiContent {
     pub parts: Vec<GeminiPart>,
 }
 
+// `text` is optional (not the required field it used to be) because a
+// function-call response part carries only `functionCall`, no `text` at
+// all — Fase 7.10.4. Outgoing request parts (built by this app) always set
+// `text` and leave `function_call` `None`; only inbound response parsing
+// can produce the other shape.
 #[derive(Debug, Serialize, Deserialize)]
 pub struct GeminiPart {
-    pub text: String,
+    #[serde(skip_serializing_if = "Option::is_none", default)]
+    pub text: Option<String>,
+    #[serde(rename = "functionCall", skip_serializing_if = "Option::is_none", default)]
+    pub function_call: Option<GeminiFunctionCall>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct GeminiFunctionCall {
+    pub name: String,
+    pub args: serde_json::Value,
 }
 
 #[derive(Serialize)]
 struct GeminiRequestBody<'a> {
     system_instruction: &'a GeminiSystemInstruction,
     contents: &'a [GeminiContent],
+    #[serde(skip_serializing_if = "Option::is_none")]
+    tools: Option<[GeminiTools; 1]>,
+}
+
+#[derive(Serialize)]
+struct GeminiTools {
+    #[serde(rename = "functionDeclarations")]
+    function_declarations: [GeminiFunctionDeclaration; 1],
+}
+
+#[derive(Serialize)]
+struct GeminiFunctionDeclaration {
+    name: &'static str,
+    description: &'static str,
+    parameters: serde_json::Value,
 }
 
 #[derive(Serialize)]
@@ -164,19 +267,31 @@ async fn ask_gemini_api(
     model: &str,
     system_instruction_text: String,
     history: Vec<GeminiContent>,
-) -> Result<(String, TokenUsage), AppError> {
+    tools_enabled: bool,
+) -> Result<(AiOutcome, TokenUsage), AppError> {
     let system_instruction = GeminiSystemInstruction {
         parts: vec![GeminiPart {
-            text: system_instruction_text,
+            text: Some(system_instruction_text),
+            function_call: None,
         }],
     };
 
     let url = format!(
         "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={api_key}"
     );
+    let tools = tools_enabled.then(|| {
+        [GeminiTools {
+            function_declarations: [GeminiFunctionDeclaration {
+                name: PROPOSE_VALUATION_TOOL_NAME,
+                description: PROPOSE_VALUATION_TOOL_DESCRIPTION,
+                parameters: propose_valuation_tool_parameters(),
+            }],
+        }]
+    });
     let body = GeminiRequestBody {
         system_instruction: &system_instruction,
         contents: &history,
+        tools,
     };
 
     let client = reqwest::Client::new();
@@ -193,14 +308,17 @@ async fn ask_gemini_api(
         .usage_metadata
         .map(GeminiUsageMetadata::into_token_usage)
         .unwrap_or(TokenUsage { input_tokens: 0, output_tokens: 0 });
-    let text = parsed
+    let part = parsed
         .candidates
         .into_iter()
         .next()
         .and_then(|candidate| candidate.content.parts.into_iter().next())
-        .map(|part| part.text)
         .ok_or_else(|| AppError::GeminiApi("empty response from Gemini".to_string()))?;
-    Ok((text, usage))
+    let outcome = match part.function_call {
+        Some(call) if call.name == PROPOSE_VALUATION_TOOL_NAME => parse_propose_valuation_args(call.args)?,
+        _ => AiOutcome::Text(part.text.unwrap_or_default()),
+    };
+    Ok((outcome, usage))
 }
 
 const CLAUDE_API_VERSION: &str = "2023-06-01";
@@ -219,7 +337,11 @@ fn gemini_role_to_assistant_style(role: &str) -> &'static str {
 }
 
 fn join_parts(parts: &[GeminiPart]) -> String {
-    parts.iter().map(|part| part.text.as_str()).collect::<Vec<_>>().join("")
+    parts
+        .iter()
+        .map(|part| part.text.as_deref().unwrap_or(""))
+        .collect::<Vec<_>>()
+        .join("")
 }
 
 #[derive(Serialize)]
@@ -234,6 +356,17 @@ struct ClaudeRequestBody<'a> {
     max_tokens: u32,
     system: &'a str,
     messages: Vec<ClaudeMessage>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    tools: Option<[ClaudeTool; 1]>,
+}
+
+#[derive(Serialize)]
+struct ClaudeTool {
+    name: &'static str,
+    description: &'static str,
+    // Claude's field for this is `input_schema`, not `parameters` — verified
+    // against the real API docs, differs from both Gemini and OpenAI.
+    input_schema: serde_json::Value,
 }
 
 #[derive(Deserialize)]
@@ -247,6 +380,10 @@ struct ClaudeContentBlock {
     #[serde(rename = "type")]
     block_type: String,
     text: Option<String>,
+    // Only present on a `"tool_use"` block. `input` arrives already parsed
+    // (unlike OpenAI's `arguments`, which is a JSON-encoded string).
+    name: Option<String>,
+    input: Option<serde_json::Value>,
 }
 
 // Both fields are always present on a real 200 response — no `Option`
@@ -263,7 +400,8 @@ async fn ask_claude_api(
     model: &str,
     system_instruction: String,
     history: Vec<GeminiContent>,
-) -> Result<(String, TokenUsage), AppError> {
+    tools_enabled: bool,
+) -> Result<(AiOutcome, TokenUsage), AppError> {
     let messages = history
         .iter()
         .map(|content| ClaudeMessage {
@@ -272,11 +410,19 @@ async fn ask_claude_api(
         })
         .collect();
 
+    let tools = tools_enabled.then(|| {
+        [ClaudeTool {
+            name: PROPOSE_VALUATION_TOOL_NAME,
+            description: PROPOSE_VALUATION_TOOL_DESCRIPTION,
+            input_schema: propose_valuation_tool_parameters(),
+        }]
+    });
     let body = ClaudeRequestBody {
         model,
         max_tokens: CLAUDE_MAX_TOKENS,
         system: &system_instruction,
         messages,
+        tools,
     };
 
     let client = reqwest::Client::new();
@@ -299,13 +445,24 @@ async fn ask_claude_api(
         input_tokens: parsed.usage.input_tokens,
         output_tokens: parsed.usage.output_tokens,
     };
-    let text = parsed
+    let tool_use = parsed
         .content
-        .into_iter()
-        .find(|block| block.block_type == "text")
-        .and_then(|block| block.text)
-        .ok_or_else(|| AppError::ClaudeApi("empty response from Claude".to_string()))?;
-    Ok((text, usage))
+        .iter()
+        .find(|block| block.block_type == "tool_use" && block.name.as_deref() == Some(PROPOSE_VALUATION_TOOL_NAME))
+        .and_then(|block| block.input.clone());
+    let outcome = match tool_use {
+        Some(args) => parse_propose_valuation_args(args)?,
+        None => {
+            let text = parsed
+                .content
+                .into_iter()
+                .find(|block| block.block_type == "text")
+                .and_then(|block| block.text)
+                .ok_or_else(|| AppError::ClaudeApi("empty response from Claude".to_string()))?;
+            AiOutcome::Text(text)
+        }
+    };
+    Ok((outcome, usage))
 }
 
 #[derive(Serialize)]
@@ -318,6 +475,22 @@ struct OpenAiMessage {
 struct OpenAiRequestBody<'a> {
     model: &'a str,
     messages: Vec<OpenAiMessage>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    tools: Option<[OpenAiTool; 1]>,
+}
+
+#[derive(Serialize)]
+struct OpenAiTool {
+    #[serde(rename = "type")]
+    tool_type: &'static str,
+    function: OpenAiFunctionDeclaration,
+}
+
+#[derive(Serialize)]
+struct OpenAiFunctionDeclaration {
+    name: &'static str,
+    description: &'static str,
+    parameters: serde_json::Value,
 }
 
 #[derive(Deserialize)]
@@ -333,7 +506,24 @@ struct OpenAiChoice {
 
 #[derive(Deserialize)]
 struct OpenAiResponseMessage {
-    content: String,
+    content: Option<String>,
+    // Present instead of `content` when the model calls a tool. Only the
+    // first call is used — this app never asks for parallel tool calls.
+    tool_calls: Option<Vec<OpenAiToolCall>>,
+}
+
+#[derive(Deserialize)]
+struct OpenAiToolCall {
+    function: OpenAiFunctionCall,
+}
+
+#[derive(Deserialize)]
+struct OpenAiFunctionCall {
+    name: String,
+    // JSON-encoded string, unlike Gemini's `args`/Claude's `input` which
+    // arrive already parsed — verified against the real API docs, the one
+    // casing/parsing trap that's easy to get backwards between providers.
+    arguments: String,
 }
 
 #[derive(Deserialize)]
@@ -347,7 +537,8 @@ async fn ask_openai_api(
     model: &str,
     system_instruction: String,
     history: Vec<GeminiContent>,
-) -> Result<(String, TokenUsage), AppError> {
+    tools_enabled: bool,
+) -> Result<(AiOutcome, TokenUsage), AppError> {
     // OpenAI has no separate "system" field — it's just the first message.
     let mut messages = vec![OpenAiMessage {
         role: "system",
@@ -358,7 +549,17 @@ async fn ask_openai_api(
         content: join_parts(&content.parts),
     }));
 
-    let body = OpenAiRequestBody { model, messages };
+    let tools = tools_enabled.then(|| {
+        [OpenAiTool {
+            tool_type: "function",
+            function: OpenAiFunctionDeclaration {
+                name: PROPOSE_VALUATION_TOOL_NAME,
+                description: PROPOSE_VALUATION_TOOL_DESCRIPTION,
+                parameters: propose_valuation_tool_parameters(),
+            },
+        }]
+    });
+    let body = OpenAiRequestBody { model, messages, tools };
 
     let client = reqwest::Client::new();
     let response = client
@@ -379,13 +580,25 @@ async fn ask_openai_api(
         input_tokens: parsed.usage.prompt_tokens,
         output_tokens: parsed.usage.completion_tokens,
     };
-    let text = parsed
+    let message = parsed
         .choices
         .into_iter()
         .next()
-        .map(|choice| choice.message.content)
+        .map(|choice| choice.message)
         .ok_or_else(|| AppError::OpenAiApi("empty response from OpenAI".to_string()))?;
-    Ok((text, usage))
+    let tool_call = message
+        .tool_calls
+        .and_then(|calls| calls.into_iter().next())
+        .filter(|call| call.function.name == PROPOSE_VALUATION_TOOL_NAME);
+    let outcome = match tool_call {
+        Some(call) => {
+            let args: serde_json::Value = serde_json::from_str(&call.function.arguments)
+                .map_err(|e| AppError::OpenAiApi(format!("invalid tool call arguments: {e}")))?;
+            parse_propose_valuation_args(args)?
+        }
+        None => AiOutcome::Text(message.content.unwrap_or_default()),
+    };
+    Ok((outcome, usage))
 }
 
 // Shared by `ask_ai` (floating widget) and `commands::conversation`'s saved
@@ -398,13 +611,20 @@ pub async fn generate_reply(
     key_id: i32,
     model: &str,
     history: Vec<GeminiContent>,
-) -> Result<(String, TokenUsage), AppError> {
+    tools_enabled: bool,
+) -> Result<(AiOutcome, TokenUsage), AppError> {
     let (provider, api_key) = read_api_key_secret(db, key_id).await?;
     let system_instruction = build_system_instruction(db).await?;
     match provider {
-        Provider::Gemini => ask_gemini_api(&api_key, model, system_instruction, history).await,
-        Provider::Claude => ask_claude_api(&api_key, model, system_instruction, history).await,
-        Provider::OpenAi => ask_openai_api(&api_key, model, system_instruction, history).await,
+        Provider::Gemini => {
+            ask_gemini_api(&api_key, model, system_instruction, history, tools_enabled).await
+        }
+        Provider::Claude => {
+            ask_claude_api(&api_key, model, system_instruction, history, tools_enabled).await
+        }
+        Provider::OpenAi => {
+            ask_openai_api(&api_key, model, system_instruction, history, tools_enabled).await
+        }
     }
 }
 
@@ -419,8 +639,17 @@ pub async fn ask_ai(
     db: tauri::State<'_, DatabaseConnection>,
     history: Vec<GeminiContent>,
 ) -> Result<String, AppError> {
-    let (text, _usage) = generate_reply(db.inner(), key_id, &model, history).await?;
-    Ok(text)
+    let (outcome, _usage) = generate_reply(db.inner(), key_id, &model, history, false).await?;
+    match outcome {
+        AiOutcome::Text(text) => Ok(text),
+        // `tools_enabled: false` means no tool was ever declared to the
+        // provider, so this arm shouldn't be reachable in practice — kept
+        // exhaustive (not `unreachable!()`) so a future provider quirk fails
+        // soft instead of panicking the floating widget.
+        AiOutcome::ToolCall { .. } => Err(AppError::InvalidInput(
+            "unexpected tool call with tools disabled".to_string(),
+        )),
+    }
 }
 
 #[cfg(test)]
@@ -524,5 +753,93 @@ mod tests {
         let parsed: OpenAiResponseBody = serde_json::from_str(body).unwrap();
         assert_eq!(parsed.usage.prompt_tokens, 60);
         assert_eq!(parsed.usage.completion_tokens, 20);
+    }
+
+    fn sample_propose_args() -> serde_json::Value {
+        serde_json::json!({
+            "model": "graham",
+            "ticker": "PETR4",
+            "reference_year": 2025,
+            "current_price": 35.5,
+            "inputs": { "eps": 4.2, "book_value_per_share": 22.0 }
+        })
+    }
+
+    #[test]
+    fn parse_propose_valuation_args_extracts_typed_fields() {
+        let outcome = parse_propose_valuation_args(sample_propose_args()).unwrap();
+        match outcome {
+            AiOutcome::ToolCall { model, ticker, reference_year, current_price, inputs } => {
+                assert_eq!(model, "graham");
+                assert_eq!(ticker, "PETR4");
+                assert_eq!(reference_year, 2025);
+                assert_eq!(current_price, 35.5);
+                assert_eq!(inputs["eps"], 4.2);
+            }
+            AiOutcome::Text(_) => panic!("expected a tool call"),
+        }
+    }
+
+    #[test]
+    fn parse_propose_valuation_args_rejects_missing_field() {
+        let mut args = sample_propose_args();
+        args.as_object_mut().unwrap().remove("ticker");
+        assert!(parse_propose_valuation_args(args).is_err());
+    }
+
+    #[test]
+    fn gemini_function_call_response_parses_to_tool_call() {
+        let body = r#"{
+            "candidates": [{"content": {"role": "model", "parts": [
+                {"functionCall": {"name": "propose_valuation", "args": {
+                    "model": "graham", "ticker": "PETR4", "reference_year": 2025,
+                    "current_price": 35.5, "inputs": {"eps": 4.2, "book_value_per_share": 22.0}
+                }}}
+            ]}}]
+        }"#;
+        let parsed: GeminiResponseBody = serde_json::from_str(body).unwrap();
+        let part = parsed.candidates.into_iter().next().unwrap().content.parts.into_iter().next().unwrap();
+        assert!(part.text.is_none());
+        let call = part.function_call.unwrap();
+        assert_eq!(call.name, PROPOSE_VALUATION_TOOL_NAME);
+        let outcome = parse_propose_valuation_args(call.args).unwrap();
+        assert!(matches!(outcome, AiOutcome::ToolCall { ref ticker, .. } if ticker == "PETR4"));
+    }
+
+    #[test]
+    fn claude_tool_use_response_parses_to_tool_call() {
+        let body = r#"{
+            "content": [{"type": "tool_use", "id": "toolu_1", "name": "propose_valuation", "input": {
+                "model": "graham", "ticker": "PETR4", "reference_year": 2025,
+                "current_price": 35.5, "inputs": {"eps": 4.2, "book_value_per_share": 22.0}
+            }}],
+            "usage": {"input_tokens": 80, "output_tokens": 30}
+        }"#;
+        let parsed: ClaudeResponseBody = serde_json::from_str(body).unwrap();
+        let block = parsed.content.into_iter().next().unwrap();
+        assert_eq!(block.block_type, "tool_use");
+        assert_eq!(block.name.as_deref(), Some(PROPOSE_VALUATION_TOOL_NAME));
+        let outcome = parse_propose_valuation_args(block.input.unwrap()).unwrap();
+        assert!(matches!(outcome, AiOutcome::ToolCall { ref ticker, .. } if ticker == "PETR4"));
+    }
+
+    #[test]
+    fn openai_tool_calls_response_parses_to_tool_call() {
+        let body = r#"{
+            "choices": [{"message": {"role": "assistant", "content": null, "tool_calls": [
+                {"id": "call_1", "type": "function", "function": {
+                    "name": "propose_valuation",
+                    "arguments": "{\"model\":\"graham\",\"ticker\":\"PETR4\",\"reference_year\":2025,\"current_price\":35.5,\"inputs\":{\"eps\":4.2,\"book_value_per_share\":22.0}}"
+                }}
+            ]}}],
+            "usage": {"prompt_tokens": 60, "completion_tokens": 20, "total_tokens": 80}
+        }"#;
+        let parsed: OpenAiResponseBody = serde_json::from_str(body).unwrap();
+        let message = parsed.choices.into_iter().next().unwrap().message;
+        let call = message.tool_calls.unwrap().into_iter().next().unwrap();
+        assert_eq!(call.function.name, PROPOSE_VALUATION_TOOL_NAME);
+        let args: serde_json::Value = serde_json::from_str(&call.function.arguments).unwrap();
+        let outcome = parse_propose_valuation_args(args).unwrap();
+        assert!(matches!(outcome, AiOutcome::ToolCall { ref ticker, .. } if ticker == "PETR4"));
     }
 }

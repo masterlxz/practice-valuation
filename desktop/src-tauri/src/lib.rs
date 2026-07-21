@@ -51,6 +51,7 @@ pub fn run() {
             commands::conversation::delete_conversation,
             commands::conversation::get_conversation_messages,
             commands::conversation::send_conversation_message,
+            commands::ai_proposal::respond_to_valuation_proposal,
             commands::collector::run_stock_collector,
             commands::collector::run_crypto_collector,
             commands::collector::list_stock_quotes,

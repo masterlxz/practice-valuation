@@ -3,9 +3,11 @@ use sea_orm::{
     Unchanged,
 };
 use serde::Serialize;
+use serde_json::Value as JsonValue;
 
-use crate::commands::chat::{generate_reply, GeminiContent, GeminiPart};
-use crate::entity::{ai_conversation, ai_message};
+use crate::commands::ai_proposal::{self, ProposalPayload};
+use crate::commands::chat::{generate_reply, AiOutcome, GeminiContent, GeminiPart};
+use crate::entity::{ai_conversation, ai_message, ai_valuation_proposal};
 use crate::error::AppError;
 
 const DEFAULT_TITLE: &str = "New conversation";
@@ -31,6 +33,36 @@ impl From<ai_conversation::Model> for ConversationSummary {
     }
 }
 
+// Fase 7.10.4 — the frontend's tool-call preview card and approve/deny
+// state both derive from this, not from parsing `ConversationMessage.content`
+// as text. `payload`/`preview` are parsed here (not left as strings) so the
+// frontend never needs to `JSON.parse` anything itself.
+#[derive(Serialize)]
+pub struct ValuationProposalSummary {
+    pub id: i32,
+    pub model: String,
+    pub payload: JsonValue,
+    pub preview: JsonValue,
+    pub status: String,
+    pub created_valuation_id: Option<i32>,
+}
+
+impl From<ai_valuation_proposal::Model> for ValuationProposalSummary {
+    fn from(row: ai_valuation_proposal::Model) -> Self {
+        ValuationProposalSummary {
+            id: row.id,
+            model: row.model,
+            // A malformed stored payload/preview shouldn't 500 the whole
+            // conversation view — fall back to `Null`, the frontend just
+            // won't be able to render that one card's details.
+            payload: serde_json::from_str(&row.payload).unwrap_or(JsonValue::Null),
+            preview: serde_json::from_str(&row.preview).unwrap_or(JsonValue::Null),
+            status: row.status,
+            created_valuation_id: row.created_valuation_id,
+        }
+    }
+}
+
 #[derive(Serialize)]
 pub struct ConversationMessage {
     pub id: i32,
@@ -39,10 +71,11 @@ pub struct ConversationMessage {
     pub created_at: String,
     pub input_tokens: Option<i32>,
     pub output_tokens: Option<i32>,
+    pub proposal: Option<ValuationProposalSummary>,
 }
 
-impl From<ai_message::Model> for ConversationMessage {
-    fn from(row: ai_message::Model) -> Self {
+impl ConversationMessage {
+    pub(crate) fn from_row(row: ai_message::Model, proposal: Option<ai_valuation_proposal::Model>) -> Self {
         ConversationMessage {
             id: row.id,
             role: row.role,
@@ -50,6 +83,7 @@ impl From<ai_message::Model> for ConversationMessage {
             created_at: row.created_at,
             input_tokens: row.input_tokens,
             output_tokens: row.output_tokens,
+            proposal: proposal.map(ValuationProposalSummary::from),
         }
     }
 }
@@ -138,13 +172,27 @@ pub async fn get_conversation_messages(
         .all(db.inner())
         .await?;
 
-    Ok(rows.into_iter().map(ConversationMessage::from).collect())
+    let message_ids: Vec<i32> = rows.iter().map(|r| r.id).collect();
+    let proposals = ai_valuation_proposal::Entity::find()
+        .filter(ai_valuation_proposal::Column::MessageId.is_in(message_ids))
+        .all(db.inner())
+        .await?;
+
+    Ok(rows
+        .into_iter()
+        .map(|row| {
+            let proposal = proposals.iter().find(|p| p.message_id == row.id).cloned();
+            ConversationMessage::from_row(row, proposal)
+        })
+        .collect())
 }
 
 // Inserts the user's message, calls the same `generate_reply` the floating
 // widget uses (Fase 7.10.2 is the first DB write the chat does), inserts the
 // reply, and remembers the key/model used for next time this conversation is
-// reopened.
+// reopened. Fase 7.10.4: `generate_reply` is called with tool-calling turned
+// on, so the reply can be either plain text or a `propose_valuation` call —
+// see the `AiOutcome` match below.
 #[tauri::command]
 pub async fn send_conversation_message(
     db: tauri::State<'_, DatabaseConnection>,
@@ -172,23 +220,99 @@ pub async fn send_conversation_message(
         .into_iter()
         .map(|row| GeminiContent {
             role: row.role,
-            parts: vec![GeminiPart { text: row.content }],
+            parts: vec![GeminiPart { text: Some(row.content), function_call: None }],
         })
         .collect();
 
-    let (reply_text, usage) = generate_reply(db.inner(), key_id, &model, history).await?;
+    let (outcome, usage) = generate_reply(db.inner(), key_id, &model, history, true).await?;
 
-    let reply_row = ai_message::ActiveModel {
-        conversation_id: Set(conversation_id),
-        role: Set("model".to_string()),
-        content: Set(reply_text),
-        created_at: Set(chrono::Utc::now().to_rfc3339()),
-        input_tokens: Set(Some(usage.input_tokens)),
-        output_tokens: Set(Some(usage.output_tokens)),
-        ..Default::default()
-    }
-    .insert(db.inner())
-    .await?;
+    let (reply_row, proposal_row) = match outcome {
+        AiOutcome::Text(text) => {
+            let row = ai_message::ActiveModel {
+                conversation_id: Set(conversation_id),
+                role: Set("model".to_string()),
+                content: Set(text),
+                created_at: Set(chrono::Utc::now().to_rfc3339()),
+                input_tokens: Set(Some(usage.input_tokens)),
+                output_tokens: Set(Some(usage.output_tokens)),
+                ..Default::default()
+            }
+            .insert(db.inner())
+            .await?;
+            (row, None)
+        }
+        AiOutcome::ToolCall { model: proposed_model, ticker, reference_year, current_price, inputs } => {
+            match ai_proposal::validate_and_preview(&proposed_model, &inputs, current_price) {
+                Ok((fair_price, safety_margin, verdict)) => {
+                    // No JSON-cru in `content` — the frontend derives the
+                    // real preview card from the joined `ai_valuation_proposal`
+                    // row (see `ValuationProposalSummary`), not from parsing
+                    // this text. It's only a fallback label.
+                    let placeholder_row = ai_message::ActiveModel {
+                        conversation_id: Set(conversation_id),
+                        role: Set("model".to_string()),
+                        content: Set(format!(
+                            "Proposta de valuation: {ticker} ({proposed_model}) — preço justo R$ {fair_price:.2}, margem {:.1}%, {verdict}.",
+                            safety_margin * 100.0
+                        )),
+                        created_at: Set(chrono::Utc::now().to_rfc3339()),
+                        input_tokens: Set(Some(usage.input_tokens)),
+                        output_tokens: Set(Some(usage.output_tokens)),
+                        ..Default::default()
+                    }
+                    .insert(db.inner())
+                    .await?;
+
+                    let payload = serde_json::to_string(&ProposalPayload {
+                        ticker,
+                        reference_year,
+                        current_price,
+                        inputs,
+                    })
+                    .map_err(|e| AppError::InvalidInput(e.to_string()))?;
+                    let preview = serde_json::json!({
+                        "fair_price": fair_price,
+                        "safety_margin": safety_margin,
+                        "verdict": verdict,
+                    })
+                    .to_string();
+
+                    let proposal_row = ai_valuation_proposal::ActiveModel {
+                        message_id: Set(placeholder_row.id),
+                        model: Set(proposed_model),
+                        payload: Set(payload),
+                        preview: Set(preview),
+                        status: Set("pending".to_string()),
+                        created_valuation_id: Set(None),
+                        created_at: Set(chrono::Utc::now().to_rfc3339()),
+                        ..Default::default()
+                    }
+                    .insert(db.inner())
+                    .await?;
+
+                    (placeholder_row, Some(proposal_row))
+                }
+                Err(err) => {
+                    // Dead end, no retry (deliberate Fase 7.10.4 simplicity
+                    // choice): just surface the error, no proposal row.
+                    let row = ai_message::ActiveModel {
+                        conversation_id: Set(conversation_id),
+                        role: Set("model".to_string()),
+                        content: Set(format!(
+                            "A IA tentou propor uma valuation mas os dados são inválidos: {err}"
+                        )),
+                        created_at: Set(chrono::Utc::now().to_rfc3339()),
+                        input_tokens: Set(Some(usage.input_tokens)),
+                        output_tokens: Set(Some(usage.output_tokens)),
+                        ..Default::default()
+                    }
+                    .insert(db.inner())
+                    .await?;
+                    (row, None)
+                }
+            }
+        }
+    };
 
     ai_conversation::ActiveModel {
         id: Unchanged(conversation_id),
@@ -200,5 +324,5 @@ pub async fn send_conversation_message(
     .update(db.inner())
     .await?;
 
-    Ok(reply_row.into())
+    Ok(ConversationMessage::from_row(reply_row, proposal_row))
 }
