@@ -84,7 +84,7 @@ Fase 2 — Coleta de Dados (ações BR + cripto)      [~] Em andamento (cotaçã
 Fase 3 — Motor de Cálculo (preço-teto/valuation)  [x] Completa — 7 modelos de ação + score cripto (9 indicadores), todos ponta a ponta
 Fase 4 — Interface Desktop                        [~] Em andamento (shadcn/ui + TanStack Table instalados, tela de valuations salvos completa incl. detalhe fino de premissas, 7 formulários + painel cripto vestidos, identidade visual dark+verde definida; Sessão 10: painel cru de tabelas de teste removido, cada formulário ganhou botão de buscar dado por ticker que preenche os campos automaticamente)
 Fase 5 — Monitoramento & Alertas                  [x] Completa — cadastro (5.1), verificação periódica (5.2) e notificação nativa do SO (5.3, validada na Sessão 12)
-Fase 6 — Publicação (GitHub público)               [ ] Não iniciada
+Fase 6 — Publicação (GitHub público)               [~] Em andamento (6.2 README e 6.3 LICENSE concluídos na Sessão 25, adiantados por pedido; falta 6.1 checklist de segurança e 6.4 primeiro commit/push público)
 Fase 7 — Chat de IA Integrado                      [~] Em andamento (7.1 a 7.9.5 completas — storage de múltiplas chaves nomeadas por provider, os 3 clientes HTTP (Gemini/Claude/OpenAI), contexto de leitura do banco, página de Configurações nova (seção IA) e seletor de chave no chat; Claude/OpenAI ainda sem teste contra API real por falta de chave de teste — ver Fase 7.6/7.7/Sessão 21; falta só a ideia grande nova 7.10 (chat em tela cheia estilo ChatGPT, com IA podendo criar/editar valuations com confirmação — só registrada, ver Fases Detalhadas))
 Fase 8 — Sync Multi-Dispositivo via TruthID+IPFS  [~] Em andamento — Sessão 23 (2026-07-16): transporte cross-device do `/sign-request` validado ponta a ponta; Sessão 24 (2026-07-21): fatia 8.1 (contrato próprio `SyncRegistry` + leitura via `eth_call`) implementada e testada — deploy real em Base Sepolia ainda pendente, aguardando revisão do dono do projeto; ver Fases Detalhadas
 Fase 9 — Tela de Pesquisa de Ação (Stock Lookup)  [x] Completa — 9.1 a 9.5 concluídas, nenhuma pendência conhecida
@@ -480,8 +480,8 @@ Diferente de ação (1x/ano), aqui é um **score contínuo**: cada indicador vir
 
 **Etapas**:
 - [ ] 6.1 — Checklist de segurança final (ver "Diretriz de segurança") antes do primeiro push público
-- [ ] 6.2 — README explicando o projeto (em inglês, já que o repo é público)
-- [ ] 6.3 — LICENSE
+- [x] 6.2 — README explicando o projeto (em inglês, já que o repo é público). **Concluído na Sessão 25** — adiantado por pedido do dono do projeto ("por mais que eu ache que é cedo"), mesmo o resto da Fase 6 não tendo começado; README pode ser revisado/expandido mais pra frente. Seções: o quê/por quê, features, tabela de arquitetura (desktop/data-collector/contracts), build from source (Docker pro app, Foundry pros contratos), status (aponta pro `PROJECT_STATE.md` pra detalhe), segurança (keyring, DB gitignored, não auditado), license
+- [x] 6.3 — LICENSE. **Concluído na Sessão 25** junto com o README — MIT, mesmo texto/copyright (`masterlxz`, 2026) já usado no TruthID, pra consistência entre os dois projetos do mesmo dono
 - [ ] 6.4 — `git init` + primeiro commit
 - [ ] 6.5 — **Ideia registrada na Sessão 10** (não planejada em detalhe ainda, só anotada): aviso de atualização disponível — um indicador discreto num cantinho da tela quando existir uma versão nova do app. Candidato natural: `tauri-plugin-updater` (checa contra um manifesto de release, ex. GitHub Releases) — só faz sentido depois que 6.1–6.4 existirem (precisa ter release/versionamento publicado pra ter contra o que comparar)
 
@@ -1088,6 +1088,13 @@ Isso fecha, do lado do TruthID (Sessão 114 de lá), **a pendência "nenhuma tro
 - **`desktop/src-tauri/src/sync_registry.rs`** (novo): `sol!` macro gera o encode/decode ABI a partir da assinatura Solidity; `get_record(who)` monta o `eth_call` via `reqwest` contra `https://sepolia.base.org` (RPC pública, sem chave) e um endereço de contrato ainda placeholder. Revert `RecordNotFound` vira `Ok(None)`. 4 testes novos, **68/68 no total** (`cargo test --lib`), sem regressão. `commands/sync_registry.rs` (comando fino `get_sync_record`) e `TruthIdPanel.tsx` (campo de endereço + botão "Read sync record") seguem os padrões já estabelecidos no resto do projeto.
 - **Validado sem deploy**: `cargo check`/`cargo test --lib`/`npx tsc --noEmit` limpos; `curl` real contra `https://sepolia.base.org` confirmou o RPC respondendo (chain id `0x14a34`) e que `eth_call` pro endereço placeholder retorna `"0x"` sem revert — exatamente o caminho já tratado como erro de decodificação, não um crash.
 - **Deploy real ainda não rodado**: dono do projeto pediu pra revisar o contrato mais uma vez antes do `--broadcast` (gasta ETH de testnet). Próxima sessão: revisão, deploy em Base Sepolia, atualizar `SYNC_REGISTRY_ADDRESS`, e validar leitura ponta a ponta (escrever 1 registro via `cast send`, ler pelo app rodando).
+
+### 2026-07-21 — Sessão 25
+
+- **Objetivo**: adiantar 6.2 (README) e 6.3 (LICENSE), por pedido explícito do dono do projeto — reconhecendo que é cedo pra Fase 6 de verdade (nenhum outro item dela começou), mas preferiu já ter os dois no repo, com o README podendo ser revisado/expandido mais pra frente.
+- **`LICENSE`**: MIT, mesmo texto e copyright (`masterlxz`, 2026) já usado no `LICENSE` do TruthID — consistência entre os dois projetos do mesmo dono, e já batendo com os cabeçalhos `SPDX-License-Identifier: MIT` que os contratos Solidity (`contracts/src/*.sol`) já usam desde a Sessão 24.
+- **`README.md`** (inglês, repo público): seções "Why" (motivação — várias metodologias de valuation por ativo não cabem numa planilha), "What it does" (7 modelos, valuations múltiplas salvas, score cripto, alertas, Stock Lookup, chat de IA, sync via TruthID+IPFS "in progress"), tabela de arquitetura (`desktop/`, `data-collector/`, `contracts/` — sem API entre Rust e Python, só o SQLite compartilhado), "Building from source" (`./desktop/dev.sh` pro app, `forge build`/`forge test` pros contratos), "Status" (aponta pro `PROJECT_STATE.md` em vez de duplicar o roadmap), "Security" (chave de IA só no keyring, banco SQLite gitignored, projeto pessoal sem auditoria profissional), "License". Estrutura inspirada no `README.md` do TruthID (mesmas seções largas), mas conteúdo próprio — este projeto não tem SDK/protocolo pra terceiros integrarem, é uma ferramenta pessoal.
+- Nenhum código tocado — só os dois arquivos novos na raiz do repo.
 
 ---
 

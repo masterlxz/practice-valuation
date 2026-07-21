@@ -1,0 +1,73 @@
+# Practice Valuation
+
+A personal desktop app for tracking B3 stock and crypto investment theses — fair-price valuation
+models plus a crypto scoring dashboard, replacing a spreadsheet.
+
+## Why
+
+Tracking "is this stock cheap?" across several valuation methods, each with its own assumptions,
+outgrows a spreadsheet fast — especially when you want to keep more than one calculation per asset
+(different growth-rate assumptions, compared side by side) and get notified automatically when an
+asset crosses into a "buy zone." This app replaces that spreadsheet with a small local database and
+a UI built around exactly that workflow.
+
+## What it does
+
+- **7 stock valuation models**: Bazin, Graham, Gordon/DDM, DCF/FCFF, Banks (P/B–ROE–Gordon), RNAV,
+  and Projected Ceiling Price — each with its own guarded inputs and pass/fail verdict.
+- **Multiple saved valuations per ticker**, each with its own assumptions, browsable and comparable.
+- **Crypto score dashboard**: a 9-indicator green/neutral/red score (TVL trend, net issuance,
+  fees-vs-issuance, NVT ratio automated; the rest fall back to manual entry where no free data
+  source exists).
+- **Alerts**: register a price/indicator rule, a background check runs periodically, and a native
+  OS notification fires when it triggers.
+- **Stock Lookup**: search any B3 ticker for quote, fundamentals, technicals (SMA/CAGR), a
+  dividend-history chart, and a free-text note — auto-fetches data on first search, cached after.
+- **AI chat panel**: ask questions about your own saved valuations/alerts using your own Gemini,
+  Claude, or OpenAI API key — read-only access to your data, key stored in the OS keyring.
+- **(in progress)** Cross-device sync via [TruthID](https://github.com/masterlxz/truthid) + IPFS —
+  no server operated by this project; see `PROJECT_STATE.md`, Fase 8.
+
+## Architecture
+
+| Component | Stack | Path |
+|---|---|---|
+| Desktop app | Tauri + Rust + React/TypeScript | [`desktop/`](desktop/) |
+| Data collector | Python (fetches quotes/fundamentals/crypto data) | [`data-collector/`](data-collector/) |
+| Smart contract (sync, in progress) | Solidity (Foundry) | [`contracts/`](contracts/) |
+
+The desktop app and the data collector never talk over a network or IPC — they just read and write
+the same local SQLite file. The Rust side runs the collector as a subprocess on demand (a button in
+the UI), not on a schedule.
+
+## Building from source
+
+**Desktop app** (Tauri + React, runs in Docker to avoid host toolchain setup):
+```
+cd desktop
+./dev.sh
+```
+
+**Smart contracts** ([Foundry](https://book.getfoundry.sh/)):
+```
+cd contracts
+forge build
+forge test
+```
+
+## Status
+
+This is a personal project built incrementally, session by session, at a background pace — not
+every phase is finished. `PROJECT_STATE.md` at the repo root has the full roadmap, architecture
+decisions, and session-by-session history.
+
+## Security
+
+- AI provider API keys live in the OS keyring, never in the SQLite database or in git.
+- Your local SQLite database (actual valuations/portfolio data) is gitignored and never leaves your
+  machine.
+- This is a personal tool, not professionally audited — treat it as early-stage software.
+
+## License
+
+MIT — see [`LICENSE`](LICENSE).
