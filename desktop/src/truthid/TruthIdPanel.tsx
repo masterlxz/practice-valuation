@@ -1,9 +1,10 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { useMutation } from "@tanstack/react-query";
 import type { AppError } from "../types";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 import { renderQrToCanvas } from "./renderQr";
 
 type TruthIdHandshakeResult = {
@@ -24,6 +25,14 @@ type CrossDeviceSession = {
   ephemeral_priv_key_hex: string;
   expires_at_ms: number;
   qr_payload_json: string;
+};
+
+type CidRecordResponse = {
+  cid: string;
+  content_hash: string;
+  updated_at: number;
+  version: number;
+  exists: boolean;
 };
 
 /**
@@ -57,6 +66,13 @@ function TruthIdPanel() {
         ephemeralPrivKeyHex: session.ephemeral_priv_key_hex,
         expiresAtMs: session.expires_at_ms,
       }),
+  });
+
+  // Fase 8.1: leitura pública (eth_call) do SyncRegistry — prova de conceito,
+  // sem escrita ainda (Fase 8.2 cuida disso via canal /sign-request acima).
+  const [syncAddress, setSyncAddress] = useState("");
+  const syncRecordMutation = useMutation<CidRecordResponse | null, AppError, string>({
+    mutationFn: (address) => invoke("get_sync_record", { address }),
   });
 
   const qrCanvasRef = useRef<HTMLCanvasElement>(null);
@@ -177,6 +193,41 @@ function TruthIdPanel() {
               {crossDeviceResultMutation.data.error && (
                 <p className="text-red-600">{crossDeviceResultMutation.data.error}</p>
               )}
+            </div>
+          )}
+        </div>
+
+        <div className="flex flex-col gap-2 border-t pt-6">
+          <p className="text-sm text-muted-foreground">
+            Fase 8.1 — SyncRegistry (Base Sepolia): read-only proof of concept, no contract deployed
+            yet.
+          </p>
+          <div className="flex gap-2">
+            <Input
+              placeholder="0x..."
+              value={syncAddress}
+              onChange={(e) => setSyncAddress(e.target.value)}
+            />
+            <Button
+              variant="outline"
+              onClick={() => syncRecordMutation.mutate(syncAddress)}
+              disabled={syncRecordMutation.isPending || !syncAddress}
+            >
+              {syncRecordMutation.isPending ? "Reading..." : "Read sync record"}
+            </Button>
+          </div>
+          {syncRecordMutation.isError && (
+            <p className="text-red-600">{syncRecordMutation.error.message}</p>
+          )}
+          {syncRecordMutation.isSuccess && syncRecordMutation.data === null && (
+            <p className="text-muted-foreground">No record found for this address.</p>
+          )}
+          {syncRecordMutation.isSuccess && syncRecordMutation.data && (
+            <div>
+              <p>CID: {syncRecordMutation.data.cid}</p>
+              <p className="break-all">Content hash: {syncRecordMutation.data.content_hash}</p>
+              <p>Version: {syncRecordMutation.data.version}</p>
+              <p>Updated at: {new Date(syncRecordMutation.data.updated_at * 1000).toLocaleString()}</p>
             </div>
           )}
         </div>

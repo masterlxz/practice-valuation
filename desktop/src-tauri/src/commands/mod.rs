@@ -12,5 +12,6 @@ pub mod projected_ceiling;
 pub mod rim;
 pub mod rnav;
 pub mod stock_notes;
+pub mod sync_registry;
 pub mod truthid;
 pub mod valuation;

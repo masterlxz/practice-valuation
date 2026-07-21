@@ -36,6 +36,10 @@ pub enum AppError {
     TruthIdNotFound,
     #[error("TruthID error: {0}")]
     TruthId(String),
+    #[error("invalid address: {0}")]
+    InvalidAddress(String),
+    #[error("RPC error: {0}")]
+    Rpc(String),
 }
 
 impl AppError {
@@ -58,6 +62,8 @@ impl AppError {
             AppError::OpenAiApi(_) => "OPENAI_API_ERROR",
             AppError::TruthIdNotFound => "TRUTHID_NOT_FOUND",
             AppError::TruthId(_) => "TRUTHID_ERROR",
+            AppError::InvalidAddress(_) => "INVALID_ADDRESS",
+            AppError::Rpc(_) => "RPC_ERROR",
         }
     }
 }

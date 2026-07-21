@@ -29,5 +29,10 @@ dist/
 build/
 target/
 
+# Foundry
+contracts/out/
+contracts/cache/
+contracts/.env
+
 # OS/editor
 .DS_Store

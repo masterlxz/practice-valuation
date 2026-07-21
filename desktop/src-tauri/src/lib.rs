@@ -10,6 +10,7 @@ mod entity;
 mod error;
 mod ipns_key;
 mod lan_sweep;
+mod sync_registry;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -57,7 +58,8 @@ pub fn run() {
             commands::truthid::test_truthid_connection,
             commands::truthid::send_test_sign_request,
             commands::truthid::create_cross_device_sign_request,
-            commands::truthid::await_cross_device_sign_request_response
+            commands::truthid::await_cross_device_sign_request_response,
+            commands::sync_registry::get_sync_record
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
